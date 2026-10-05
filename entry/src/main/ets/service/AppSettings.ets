@@ -7,7 +7,6 @@ const KEY_USER_NAME: string = 'login_user_name';
 const KEY_PASSWORD: string = 'login_password';
 const KEY_REMEMBER: string = 'login_remember';
 const KEY_HIDE_COLLECTIONS: string = 'hide_collections';
-const KEY_LOOP: string = 'play_loop';
 const KEY_SHUFFLE: string = 'play_shuffle';
 
 export class AppSettings {
@@ -78,10 +77,9 @@ export class AppSettings {
     }
   }
 
-  static savePlaybackOptions(context: common.UIAbilityContext, loop: boolean, shuffle: boolean): void {
+  static saveShuffle(context: common.UIAbilityContext, shuffle: boolean): void {
     try {
       const store = AppSettings.getStore(context);
-      store.putSync(KEY_LOOP, loop);
       store.putSync(KEY_SHUFFLE, shuffle);
       store.flushSync();
     } catch (error) {
@@ -89,14 +87,12 @@ export class AppSettings {
     }
   }
 
-  static loadPlaybackOptions(context: common.UIAbilityContext): Array<boolean> {
+  static loadShuffle(context: common.UIAbilityContext): boolean {
     try {
       const store = AppSettings.getStore(context);
-      const loop = store.getSync(KEY_LOOP, true) as boolean;
-      const shuffle = store.getSync(KEY_SHUFFLE, false) as boolean;
-      return [loop, shuffle];
+      return store.getSync(KEY_SHUFFLE, false) as boolean;
     } catch (error) {
-      return [true, false];
+      return false;
     }
   }
 }

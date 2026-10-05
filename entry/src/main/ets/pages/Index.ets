@@ -9,13 +9,14 @@ import { EmbyLibrary, EmbyPlaybackMode, EmbySession, EmbyVideo, EmbyVideoPage, E
 struct ShortVideoCard {
   @Prop item: EmbyVideo = new EmbyVideo();
   @Prop @Watch('onActiveChanged') active: boolean = false;
-  @Prop muted: boolean = false;
+  @Prop @Watch('onMutedChanged') muted: boolean = false;
   @Prop bottomSafePadding: number = 0;
-  @Prop playMode: string = 'off';
-  @Prop immersive: boolean = true;
+  @Prop @Watch('onPlayModeChanged') playMode: string = 'off';
+  @Prop @Watch('onImmersiveChanged') immersive: boolean = true;
   @Prop controlsHidden: boolean = false;
   onTogglePlayMode: (hint: string) => void = () => {};
   onToggleImmersive: (hint: string) => void = () => {};
+  onToggleMute: (hint: string) => void = () => {};
   onHideControls: () => void = () => {};
   onPlaybackEnd: () => void = () => {};
   @State isPlaying: boolean = false;
@@ -25,6 +26,10 @@ struct ShortVideoCard {
   @State currentSrc: string = '';
   private controller: VideoController = new VideoController();
   private lastItemId: string = '';
+  private playModeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
+  private fullscreenCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
+  private hideEyeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
+  private muteCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
 
 
   private resolveSource(item: EmbyVideo, modeIndex: number): string {
@@ -182,55 +187,205 @@ struct ShortVideoCard {
   }
 
   @Builder
-  private playModeIcon() {
-    if (this.playMode === 'shuffle') {
-      Text('⇄')
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.playModeActive() ? Color.White : '#A9B0C0')
-    } else {
-      Text('→')
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.playModeActive() ? Color.White : '#A9B0C0')
-    }
+  private playModeButtonIcon() {
+    Canvas(this.playModeCanvas)
+      .width(28)
+      .height(28)
+      .onReady(() => {
+        this.paintPlayModeIcon();
+      })
   }
 
   @Builder
-  private eyeIcon(open: boolean, pupilColor: ResourceColor) {
-    Stack({ alignContent: Alignment.Center }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Column()
-          .width(26)
-          .height(18)
-          .borderRadius(13)
-          .backgroundColor(Color.White)
-        Column()
-          .width(20)
-          .height(12)
-          .borderRadius(10)
-          .backgroundColor(pupilColor)
-      }
-      .width(26)
-      .height(18)
+  private fullscreenButtonIcon() {
+    Canvas(this.fullscreenCanvas)
+      .width(28)
+      .height(28)
+      .onReady(() => {
+        this.paintFullscreenIcon();
+      })
+  }
 
-      if (open) {
-        Column()
-          .width(9)
-          .height(9)
-          .borderRadius(5)
-          .backgroundColor(Color.White)
-      } else {
-        Column()
-          .width(26)
-          .height(2)
-          .borderRadius(1)
-          .backgroundColor(Color.White)
-          .rotate({ angle: -32 })
-      }
+  @Builder
+  private hideButtonIcon() {
+    Canvas(this.hideEyeCanvas)
+      .width(28)
+      .height(28)
+      .onReady(() => {
+        this.paintHideEye();
+      })
+  }
+
+  @Builder
+  private muteButtonIcon() {
+    Canvas(this.muteCanvas)
+      .width(28)
+      .height(28)
+      .onReady(() => {
+        this.paintMuteIcon();
+      })
+  }
+
+  private onPlayModeChanged(): void {
+    this.paintPlayModeIcon();
+  }
+
+  private onImmersiveChanged(): void {
+    this.paintFullscreenIcon();
+  }
+
+  private onMutedChanged(): void {
+    this.paintMuteIcon();
+  }
+
+  private beginIcon(ctx: CanvasRenderingContext2D, color: string): void {
+    ctx.clearRect(0, 0, ctx.width, ctx.height);
+    const s = ctx.width / 28;
+    ctx.save();
+    ctx.scale(s, s);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+
+  private endIcon(ctx: CanvasRenderingContext2D): void {
+    ctx.restore();
+  }
+
+  private paintPlayModeIcon(): void {
+    const ctx = this.playModeCanvas;
+    if (ctx.width <= 0) {
+      return;
     }
-    .width(30)
-    .height(30)
+    const color = this.playModeActive() ? '#FFFFFF' : '#A9B0C0';
+    this.beginIcon(ctx, color);
+    if (this.playMode === 'shuffle') {
+      ctx.beginPath();
+      ctx.moveTo(6, 20);
+      ctx.lineTo(20, 6);
+      ctx.moveTo(20, 6);
+      ctx.lineTo(14, 6);
+      ctx.moveTo(20, 6);
+      ctx.lineTo(20, 12);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(6, 6);
+      ctx.lineTo(20, 20);
+      ctx.moveTo(20, 20);
+      ctx.lineTo(14, 20);
+      ctx.moveTo(20, 20);
+      ctx.lineTo(20, 14);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(4, 14);
+      ctx.lineTo(20, 14);
+      ctx.moveTo(20, 14);
+      ctx.lineTo(15, 9);
+      ctx.moveTo(20, 14);
+      ctx.lineTo(15, 19);
+      ctx.stroke();
+    }
+    this.endIcon(ctx);
+  }
+
+  private paintFullscreenIcon(): void {
+    const ctx = this.fullscreenCanvas;
+    if (ctx.width <= 0) {
+      return;
+    }
+    const color = this.immersive ? '#FFFFFF' : '#A9B0C0';
+    this.beginIcon(ctx, color);
+    const m = 5;
+    const len = 6;
+    const w = 28;
+    const h = 28;
+    ctx.beginPath();
+    if (this.immersive) {
+      ctx.moveTo(m + len, m);
+      ctx.lineTo(m + len, m + len);
+      ctx.lineTo(m, m + len);
+      ctx.moveTo(w - m - len, m);
+      ctx.lineTo(w - m - len, m + len);
+      ctx.lineTo(w - m, m + len);
+      ctx.moveTo(m, h - m - len);
+      ctx.lineTo(m + len, h - m - len);
+      ctx.lineTo(m + len, h - m);
+      ctx.moveTo(w - m - len, h - m);
+      ctx.lineTo(w - m - len, h - m - len);
+      ctx.lineTo(w - m, h - m - len);
+    } else {
+      ctx.moveTo(m, m + len);
+      ctx.lineTo(m, m);
+      ctx.lineTo(m + len, m);
+      ctx.moveTo(w - m - len, m);
+      ctx.lineTo(w - m, m);
+      ctx.lineTo(w - m, m + len);
+      ctx.moveTo(m, h - m - len);
+      ctx.lineTo(m, h - m);
+      ctx.lineTo(m + len, h - m);
+      ctx.moveTo(w - m, h - m - len);
+      ctx.lineTo(w - m, h - m);
+      ctx.lineTo(w - m - len, h - m);
+    }
+    ctx.stroke();
+    this.endIcon(ctx);
+  }
+
+  private paintHideEye(): void {
+    const ctx = this.hideEyeCanvas;
+    if (ctx.width <= 0) {
+      return;
+    }
+    this.beginIcon(ctx, '#FFFFFF');
+    const cx = 14;
+    const cy = 14;
+    const rx = 11;
+    const ry = 7;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - rx, cy + ry * 0.85);
+    ctx.lineTo(cx + rx, cy - ry * 0.85);
+    ctx.stroke();
+    this.endIcon(ctx);
+  }
+
+  private paintMuteIcon(): void {
+    const ctx = this.muteCanvas;
+    if (ctx.width <= 0) {
+      return;
+    }
+    const color = this.muted ? '#FFFFFF' : '#A9B0C0';
+    this.beginIcon(ctx, color);
+    ctx.beginPath();
+    ctx.moveTo(4, 11);
+    ctx.lineTo(10, 11);
+    ctx.lineTo(16, 6);
+    ctx.lineTo(16, 22);
+    ctx.lineTo(10, 17);
+    ctx.lineTo(4, 17);
+    ctx.closePath();
+    ctx.stroke();
+    if (this.muted) {
+      ctx.beginPath();
+      ctx.moveTo(19, 9);
+      ctx.lineTo(25, 19);
+      ctx.moveTo(25, 9);
+      ctx.lineTo(19, 19);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(18, 14, 4.5, -Math.PI / 3, Math.PI / 3);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(18, 14, 7.5, -Math.PI / 3, Math.PI / 3);
+      ctx.stroke();
+    }
+    this.endIcon(ctx);
   }
 
   private nextModeLabel(): string {
@@ -333,7 +488,7 @@ struct ShortVideoCard {
         Column() {
           Column({ space: 14 }) {
             Column() {
-              this.playModeIcon()
+              this.playModeButtonIcon()
             }
             .width(48)
             .height(48)
@@ -343,10 +498,7 @@ struct ShortVideoCard {
             .onClick(() => this.onTogglePlayMode(this.playModeHint()))
 
             Column() {
-              Text(this.immersive ? '⛶' : '⛝')
-                .fontSize(24)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.immersive ? Color.White : '#A9B0C0')
+              this.fullscreenButtonIcon()
             }
             .width(48)
             .height(48)
@@ -356,7 +508,17 @@ struct ShortVideoCard {
             .onClick(() => this.onToggleImmersive(this.immersive ? '已退出全屏' : '已切换为全屏'))
 
             Column() {
-              this.eyeIcon(false, '#12141A')
+              this.muteButtonIcon()
+            }
+            .width(48)
+            .height(48)
+            .justifyContent(FlexAlign.Center)
+            .borderRadius(24)
+            .backgroundColor(this.muted ? '#5B74F6' : '#66000000')
+            .onClick(() => this.onToggleMute(this.muted ? '已开启声音' : '已静音'))
+
+            Column() {
+              this.hideButtonIcon()
             }
             .width(48)
             .height(48)
@@ -403,7 +565,6 @@ struct Index {
   @State libraryPickerVisible: boolean = false;
   @State rememberLogin: boolean = false;
   @State hideCollections: boolean = false;
-  @State loopPlayback: boolean = true;
   @State shufflePlayback: boolean = false;
   @State optionsVisible: boolean = false;
   @State topSafePadding: number = 0;
@@ -411,10 +572,18 @@ struct Index {
   @State immersive: boolean = true;
   @State controlsHidden: boolean = false;
   @State hintText: string = '';
+  @State mediaListVisible: boolean = false;
+  @State mediaListItems: Array<EmbyVideo> = [];
+  @State mediaListLoading: boolean = false;
+  @State mediaListHasMore: boolean = true;
+  @State mediaListTotal: number = 0;
   private deviceId: string = '';
   private client: EmbyClient | null = null;
   private hintTimer: number = 0;
+  private restoreEyeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private swiperController: SwiperController = new SwiperController();
+  private feedSourceCount: number = 0;
+  private gridScroller: Scroller = new Scroller();
 
   private readonly pageSize: number = 20;
 
@@ -474,9 +643,6 @@ struct Index {
     this.applyImmersiveMode();
     this.deviceId = SessionStore.getOrCreateDeviceId(context);
     this.hideCollections = AppSettings.loadHideCollections(context);
-    const playbackOptions: Array<boolean> = AppSettings.loadPlaybackOptions(context);
-    this.loopPlayback = playbackOptions[0];
-    this.shufflePlayback = playbackOptions[1];
     const savedLogin: Array<string> = AppSettings.loadLogin(context);
     this.rememberLogin = savedLogin[0] === '1';
     const savedSession = SessionStore.load(context);
@@ -771,17 +937,30 @@ struct Index {
       this.totalRecordCount = 0;
       this.hasMore = true;
       this.debugInfo = '';
+      this.feedSourceCount = 0;
     }
     try {
-      const query = new EmbyVideoQuery();
-      query.libraryId = this.selectedLibraryId;
-      query.hideCollections = this.hideCollections;
-      const startIndex = reset ? 0 : this.videos.length;
-      const page: EmbyVideoPage = await client.getVideos(startIndex, this.pageSize, query);
-      const merged: Array<EmbyVideo> = reset ? page.items : this.videos.concat(page.items);
-      this.videos = this.shufflePlayback ? this.shuffleList(merged) : merged;
-      this.totalRecordCount = page.totalRecordCount;
-      this.hasMore = this.videos.length < page.totalRecordCount && page.items.length > 0;
+      if (this.shufflePlayback && reset) {
+        const all: Array<EmbyVideo> = await this.loadAllVideos();
+        this.videos = this.shuffleList(all);
+        this.totalRecordCount = all.length;
+        this.hasMore = false;
+        this.feedSourceCount = all.length;
+      } else {
+        const query = new EmbyVideoQuery();
+        query.libraryId = this.selectedLibraryId;
+        query.hideCollections = this.hideCollections;
+        const startIndex = reset ? 0 : this.feedSourceCount;
+        const page: EmbyVideoPage = await client.getVideos(startIndex, this.pageSize, query);
+        if (reset) {
+          this.videos = page.items;
+        } else {
+          this.videos = this.videos.concat(page.items);
+        }
+        this.feedSourceCount = this.feedSourceCount + page.items.length;
+        this.totalRecordCount = page.totalRecordCount;
+        this.hasMore = this.videos.length < page.totalRecordCount && page.items.length > 0;
+      }
       if (this.videos.length === 0) {
         const views: EmbyViewsSummary = await client.getViewsSummary();
         this.debugInfo = views.text;
@@ -804,6 +983,29 @@ struct Index {
     return result;
   }
 
+  private async loadAllVideos(): Promise<Array<EmbyVideo>> {
+    const client = this.client;
+    if (client === null) {
+      return [];
+    }
+    const query = new EmbyVideoQuery();
+    query.libraryId = this.selectedLibraryId;
+    query.hideCollections = this.hideCollections;
+    const all: Array<EmbyVideo> = [];
+    let start = 0;
+    let guard = 0;
+    while (guard < 100) {
+      const page: EmbyVideoPage = await client.getVideos(start, this.pageSize, query);
+      all.push(...page.items);
+      if (page.items.length === 0 || all.length >= page.totalRecordCount) {
+        break;
+      }
+      start += page.items.length;
+      guard++;
+    }
+    return all;
+  }
+
   private libraryButtonLabel(): string {
     const name = this.selectedLibraryName.length > 6 ?
       `${this.selectedLibraryName.substring(0, 6)}…` : this.selectedLibraryName;
@@ -814,10 +1016,92 @@ struct Index {
     return this.shufflePlayback ? 'shuffle' : 'off';
   }
 
+  private feedCounter(): string {
+    const video = this.currentIndex >= 0 && this.currentIndex < this.videos.length
+      ? this.videos[this.currentIndex] : null;
+    if (this.shufflePlayback && video !== null && video.originalIndex > 0) {
+      return `${video.originalIndex}/${this.totalRecordCount}`;
+    }
+    return `${this.currentIndex + 1}/${this.totalRecordCount}`;
+  }
+
+  private async openMediaList(): Promise<void> {
+    this.mediaListVisible = true;
+    this.mediaListItems = [];
+    this.mediaListTotal = 0;
+    this.mediaListHasMore = true;
+    this.mediaListLoading = false;
+    await this.loadMediaListPage();
+    await this.scrollToCurrentMedia();
+  }
+
+  private async scrollToCurrentMedia(): Promise<void> {
+    if (this.videos.length === 0 || this.currentIndex < 0 || this.currentIndex >= this.videos.length) {
+      return;
+    }
+    const targetId = this.videos[this.currentIndex].id;
+    let attempts = 0;
+    while (this.mediaListHasMore && attempts < 50) {
+      const index = this.mediaListItems.findIndex((video: EmbyVideo) => video.id === targetId);
+      if (index >= 0) {
+        this.scrollGridTo(index);
+        return;
+      }
+      await this.loadMediaListPage();
+      attempts++;
+    }
+    const index = this.mediaListItems.findIndex((video: EmbyVideo) => video.id === targetId);
+    this.scrollGridTo(index >= 0 ? index : 0);
+  }
+
+  private scrollGridTo(index: number): void {
+    if (this.mediaListItems.length === 0) {
+      return;
+    }
+    const safeIndex = index < 0 ? 0 : index;
+    setTimeout(() => {
+      this.gridScroller.scrollToIndex(safeIndex, true, ScrollAlign.CENTER);
+    }, 80);
+  }
+
+  private async loadMediaListPage(): Promise<void> {
+    const client = this.client;
+    if (client === null || this.mediaListLoading || !this.mediaListHasMore) {
+      return;
+    }
+    this.mediaListLoading = true;
+    try {
+      const query = new EmbyVideoQuery();
+      query.libraryId = this.selectedLibraryId;
+      query.hideCollections = this.hideCollections;
+      const startIndex = this.mediaListItems.length;
+      const page: EmbyVideoPage = await client.getVideos(startIndex, this.pageSize, query);
+      this.mediaListItems = this.mediaListItems.concat(page.items);
+      this.mediaListTotal = page.totalRecordCount;
+      this.mediaListHasMore = this.mediaListItems.length < page.totalRecordCount && page.items.length > 0;
+    } catch (error) {
+      this.errorMessage = this.describeError(error as Error);
+    } finally {
+      this.mediaListLoading = false;
+    }
+  }
+
+  private playFromList(item: EmbyVideo): void {
+    this.mediaListVisible = false;
+    const index = this.videos.findIndex((video: EmbyVideo) => video.id === item.id);
+    if (index >= 0) {
+      this.currentIndex = index;
+      this.swiperController.changeIndex(index, false);
+      return;
+    }
+    this.videos.unshift(item);
+    this.currentIndex = 0;
+    this.swiperController.changeIndex(0, false);
+  }
+
   private togglePlayMode(): void {
     this.shufflePlayback = !this.shufflePlayback;
-    this.loopPlayback = false;
-    AppSettings.savePlaybackOptions(this.getAbilityContext(), this.loopPlayback, this.shufflePlayback);
+    AppSettings.saveShuffle(this.getAbilityContext(), this.shufflePlayback);
     this.loadVideos(true);
   }
 
@@ -826,21 +1110,22 @@ struct Index {
       return;
     }
     const isLast: boolean = this.currentIndex >= this.videos.length - 1;
-    if (isLast && this.hasMore) {
-      this.loadVideos(false);
+    if (isLast && this.shufflePlayback) {
+      this.videos = this.shuffleList(this.videos);
+      this.currentIndex = 0;
+      this.swiperController.changeIndex(0, false);
+      this.showHint('没有更多视频，已重新随机');
       return;
     }
-    if (isLast && this.shufflePlayback) {
-      this.loadVideos(true);
-      this.showHint('没有更多视频，已重新随机');
+    if (isLast && this.hasMore) {
+      this.loadVideos(false);
       return;
     }
     if (isLast) {
       this.showHint('已经是最后一个视频');
       return;
     }
-    this.currentIndex = this.currentIndex + 1;
-    this.swiperController.changeIndex(this.currentIndex, true);
+    this.swiperController.changeIndex(this.currentIndex + 1, true);
   }
 
   private toggleHideCollections(): void {
@@ -1031,6 +1316,33 @@ struct Index {
     return this.bottomSafePadding > 0 ? this.bottomSafePadding + 12 : 28;
   }
 
+  private drawRestoreEye(): void {
+    const ctx = this.restoreEyeCanvas;
+    if (ctx.width <= 0) {
+      return;
+    }
+    ctx.clearRect(0, 0, ctx.width, ctx.height);
+    const s = ctx.width / 28;
+    ctx.save();
+    ctx.scale(s, s);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const cx = 14;
+    const cy = 14;
+    const rx = 11;
+    const ry = 7;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, ry * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   private showHint(message: string): void {
     if (this.hintTimer !== 0) {
       clearTimeout(this.hintTimer);
@@ -1063,6 +1375,10 @@ struct Index {
               },
               onToggleImmersive: (hint: string) => {
                 this.toggleImmersive();
+                this.showHint(hint);
+              },
+              onToggleMute: (hint: string) => {
+                this.muted = !this.muted;
                 this.showHint(hint);
               },
               onHideControls: () => {
@@ -1162,20 +1478,18 @@ struct Index {
         .margin({ right: 8 })
 
         if (this.videos.length > 0) {
-          Text(`${this.currentIndex + 1}/${this.totalRecordCount}`)
+          Text(this.feedCounter())
             .fontSize(12)
             .fontColor('#D9FFFFFF')
         }
-        Button(this.muted ? '有声' : '静音')
+        Button('全部媒体')
           .height(34)
           .fontSize(12)
           .fontColor(Color.White)
           .backgroundColor('#66000000')
           .borderRadius(17)
           .padding({ left: 12, right: 12 })
-          .onClick(() => {
-            this.muted = !this.muted;
-          })
+          .onClick(() => this.openMediaList())
       }
       .width('100%')
       .constraintSize({ minHeight: 46 })
@@ -1189,30 +1503,17 @@ struct Index {
 
       if (this.controlsHidden) {
         Column() {
-          Stack({ alignContent: Alignment.Center }) {
-            Stack({ alignContent: Alignment.Center }) {
-              Column()
-                .width(30)
-                .height(21)
-                .borderRadius(15)
-                .backgroundColor(Color.White)
-              Column()
-                .width(23)
-                .height(14)
-                .borderRadius(11)
-                .backgroundColor('#12141A')
-            }
-            .width(30)
-            .height(21)
-
-            Column()
-              .width(11)
-              .height(11)
-              .borderRadius(6)
-              .backgroundColor(Color.White)
+          Column() {
+            Canvas(this.restoreEyeCanvas)
+              .width(28)
+              .height(28)
+              .onReady(() => {
+                this.drawRestoreEye();
+              })
           }
           .width(48)
           .height(48)
+          .justifyContent(FlexAlign.Center)
           .borderRadius(24)
           .backgroundColor('#66000000')
           .margin({ right: 16, bottom: this.restoreInset() })
@@ -1266,9 +1567,184 @@ struct Index {
     .backgroundColor(Color.Black)
   }
 
+  private isCurrentPlaying(item: EmbyVideo): boolean {
+    if (this.videos.length === 0 || this.currentIndex < 0 || this.currentIndex >= this.videos.length) {
+      return false;
+    }
+    return this.videos[this.currentIndex].id === item.id;
+  }
+
+  @Builder
+  private mediaGridItem(item: EmbyVideo) {
+    Column({ space: 6 }) {
+      Stack({ alignContent: Alignment.BottomEnd }) {
+        Image(item.imageUrl)
+          .width('100%')
+          .aspectRatio(16 / 9)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(8)
+          .alt($r('app.media.startIcon'))
+        if (item.durationText.length > 0) {
+          Text(item.durationText)
+            .fontSize(10)
+            .fontColor(Color.White)
+            .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+            .backgroundColor('#99000000')
+            .borderRadius(4)
+            .margin({ right: 4, bottom: 4 })
+        }
+        if (this.isCurrentPlaying(item)) {
+          Row({ space: 4 }) {
+            Text('▶')
+              .fontSize(9)
+              .fontColor(Color.White)
+            Text('播放中')
+              .fontSize(10)
+              .fontColor(Color.White)
+          }
+          .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+          .backgroundColor('#5B74F6')
+          .borderRadius(4)
+          .margin({ left: 4, top: 4 })
+          .align(Alignment.TopStart)
+        }
+      }
+      .width('100%')
+      .aspectRatio(16 / 9)
+      .border(this.isCurrentPlaying(item) ? { width: 2, color: '#5B74F6' } : { width: 0 })
+
+      Text(item.name)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.isCurrentPlaying(item) ? '#7C9CFF' : Color.White)
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+    }
+    .width('100%')
+    .onClick(() => this.playFromList(item))
+  }
+
+  @Builder
+  private mediaListPage() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#090A0F')
+
+      Column() {
+        Row() {
+          Text(this.selectedLibraryName)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Color.White)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .layoutWeight(1)
+          Text(this.mediaListTotal > 0 ? `共 ${this.mediaListTotal} 个视频` : '')
+            .fontSize(12)
+            .fontColor('#9DA3B2')
+            .margin({ right: 14 })
+          Text('关闭')
+            .fontSize(13)
+            .fontColor('#9DA3B2')
+            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+            .backgroundColor('#2B2E39')
+            .borderRadius(14)
+            .onClick(() => {
+              this.mediaListVisible = false;
+            })
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+
+        Grid(this.gridScroller) {
+          ForEach(this.mediaListItems, (item: EmbyVideo) => {
+            GridItem() {
+              this.mediaGridItem(item)
+            }
+          }, (item: EmbyVideo) => item.id)
+        }
+        .columnsTemplate('1fr 1fr 1fr')
+        .columnsGap(8)
+        .rowsGap(14)
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ left: 12, right: 12 })
+        .scrollBar(BarState.Off)
+        .onScrollIndex((_start: number, end: number) => {
+          if (end >= this.mediaListItems.length - 6) {
+            this.loadMediaListPage();
+          }
+        })
+        .onReachEnd(() => {
+          this.loadMediaListPage();
+        })
+
+        if (this.mediaListLoading) {
+          Row({ space: 10 }) {
+            LoadingProgress()
+              .width(20)
+              .height(20)
+              .color('#7C9CFF')
+            Text('正在加载更多…')
+              .fontSize(12)
+              .fontColor('#9DA3B2')
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .padding({ top: 12, bottom: 12 })
+        } else if (!this.mediaListHasMore && this.mediaListItems.length > 0) {
+          Text('已加载全部视频')
+            .fontSize(12)
+            .fontColor('#9DA3B2')
+            .width('100%')
+            .textAlign(TextAlign.Center)
+            .padding({ top: 12, bottom: 12 })
+        }
+      }
+      .width('100%')
+      .height('100%')
+      .padding({
+        top: this.topInset(),
+        bottom: this.bottomSafePadding > 0 ? this.bottomSafePadding : 12
+      })
+
+      if (this.mediaListItems.length === 0 && !this.mediaListLoading) {
+        Column({ space: 12 }) {
+          Text('暂无视频')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Color.White)
+          Text('当前媒体库没有可显示的视频条目。')
+            .fontSize(13)
+            .fontColor('#9DA3B2')
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#090A0F')
+    .transition(TransitionEffect.OPACITY.animation({ duration: 220, curve: Curve.EaseOut }))
+  }
+
+  onBackPress(): boolean {
+    if (this.mediaListVisible) {
+      this.mediaListVisible = false;
+      return true;
+    }
+    return false;
+  }
+
   build() {
     if (this.session === null) {
       this.loginPage()
+    } else if (this.mediaListVisible) {
+      this.mediaListPage()
     } else {
       this.feedPage()
     }

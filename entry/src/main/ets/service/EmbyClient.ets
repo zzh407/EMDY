@@ -16,6 +16,7 @@ const COLLECTION_TYPES: Set<string> = new Set<string>([
 export class EmbyVideoQuery {
   libraryId: string = '';
   hideCollections: boolean = false;
+  random: boolean = false;
 }
 
 interface EmbyUserDto {
@@ -161,14 +162,15 @@ export class EmbyClient {
     const baseQuery = `StartIndex=${startIndex}&Limit=${limit}&Recursive=true${parentFilter}` +
       '&Fields=Overview,MediaStreams,Container,MediaSources,People,Studios,PremiereDate,ProductionYear' +
       '&EnableImages=true&ImageTypeLimit=1';
+    const sortClause = query.random ? 'SortBy=Random' : 'SortBy=DateCreated&SortOrder=Descending';
     const queryVariants: Array<string> = [
-      `${baseQuery}&SortBy=DateCreated&SortOrder=Descending&IncludeItemTypes=Video`,
+      `${baseQuery}&${sortClause}&IncludeItemTypes=Video`,
       `${baseQuery}&IncludeItemTypes=Video`,
       `${baseQuery}&IncludeItemTypes=Episode`,
       `${baseQuery}&IncludeItemTypes=Movie`
     ];
     if (query.libraryId.length === 0) {
-      queryVariants.push(`${baseQuery}&SortBy=DateCreated&SortOrder=Descending`);
+      queryVariants.push(`${baseQuery}&${sortClause}`);
     }
 
     let firstError: string = '';
@@ -178,7 +180,7 @@ export class EmbyClient {
         const result = await this.request(path, http.RequestMethod.GET, '', true);
         const response = this.parseItems(result);
         const sourceItems: Array<EmbyItemDto> = response.Items ? response.Items : [];
-        const items: Array<EmbyVideo> = this.toVideos(sourceItems, query.hideCollections);
+        const items: Array<EmbyVideo> = this.toVideos(sourceItems, query.hideCollections, startIndex);
         if (items.length > 0) {
           return new EmbyVideoPage(items, response.TotalRecordCount ? response.TotalRecordCount : items.length);
         }
@@ -236,13 +238,16 @@ export class EmbyClient {
     }
   }
 
-  private toVideos(sourceItems: Array<EmbyItemDto>, hideCollections: boolean): Array<EmbyVideo> {
+  private toVideos(sourceItems: Array<EmbyItemDto>, hideCollections: boolean,
+    startIndex: number = 0): Array<EmbyVideo> {
     const items: Array<EmbyVideo> = [];
+    let index = 0;
     sourceItems.forEach((item: EmbyItemDto) => {
       if (hideCollections && this.isCollection(item)) {
         return;
       }
-      items.push(this.toVideo(item));
+      items.push(this.toVideo(item, startIndex + index + 1));
+      index++;
     });
     return items;
   }
@@ -316,7 +321,7 @@ export class EmbyClient {
     return '';
   }
 
-  private toVideo(item: EmbyItemDto): EmbyVideo {
+  private toVideo(item: EmbyItemDto, originalIndex: number = 0): EmbyVideo {
     const id = item.Id ? item.Id : '';
     const name = item.Name ? item.Name : '未命名视频';
     const overview = item.Overview ? item.Overview : '';
@@ -335,7 +340,7 @@ export class EmbyClient {
     return new EmbyVideo(id, name, overview, this.buildImageUrl(imageItemId), this.buildUrl(id, firstMode),
       this.formatDuration(item.RuntimeTicks ? item.RuntimeTicks : 0), this.buildAuthorName(item),
       this.buildAuthorAvatar(item), width, height, playbackModes, this.buildUrl(id, 'direct'),
-      this.buildUrl(id, 'hls'), this.buildUrl(id, 'original'));
+      this.buildUrl(id, 'hls'), this.buildUrl(id, 'original'), originalIndex);
   }
 
   private buildPlaybackModes(item: EmbyItemDto): Array<EmbyPlaybackMode> {

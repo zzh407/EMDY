@@ -29,11 +29,13 @@ export class EmbyVideo {
   directStreamUrl: string;
   hlsStreamUrl: string;
   originalStreamUrl: string;
+  originalIndex: number;
 
   constructor(id: string = '', name: string = '', overview: string = '', imageUrl: string = '',
     streamUrl: string = '', durationText: string = '', authorName: string = '', authorAvatar: string = '',
     width: number = 0, height: number = 0, playbackModes: Array<EmbyPlaybackMode> = ['direct'],
-    directStreamUrl: string = '', hlsStreamUrl: string = '', originalStreamUrl: string = '') {
+    directStreamUrl: string = '', hlsStreamUrl: string = '', originalStreamUrl: string = '',
+    originalIndex: number = 0) {
     this.id = id;
     this.name = name;
     this.overview = overview;
@@ -48,6 +50,7 @@ export class EmbyVideo {
     this.directStreamUrl = directStreamUrl;
     this.hlsStreamUrl = hlsStreamUrl;
     this.originalStreamUrl = originalStreamUrl;
+    this.originalIndex = originalIndex;
   }
 
   authorInitial(): string {

@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\admin\\.ohos\\config\\default_emdy_T7e3PVcAoNg1iSIuyXjC1aELoTjZJTwJhjPA0l-WczI=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B438347D150A43E2984225576C12643D103B6FD992F617A0FF2FC885750B8E335801B1B4C2F29B3",
+          "profile": "C:\\Users\\admin\\.ohos\\config\\default_emdy_T7e3PVcAoNg1iSIuyXjC1aELoTjZJTwJhjPA0l-WczI=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\admin\\.ohos\\config\\default_emdy_T7e3PVcAoNg1iSIuyXjC1aELoTjZJTwJhjPA0l-WczI=.p12",
+          "storePassword": "0000001B1A624AF5D024B6E986B6183448B9A68F699A364107F1E72F53F0DA6C5F4539FCE1F9B54EF44F10"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "26.0.0",
+        "compatibleSdkVersion": "6.1.1(24)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

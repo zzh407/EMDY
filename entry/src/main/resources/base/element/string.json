@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Emby 短视频客户端"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "浏览并播放 Emby 服务器中的视频"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Emdy"
+    }
+  ]
+}

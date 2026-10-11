@@ -8,6 +8,7 @@ const KEY_PASSWORD: string = 'login_password';
 const KEY_REMEMBER: string = 'login_remember';
 const KEY_HIDE_COLLECTIONS: string = 'hide_collections';
 const KEY_SHUFFLE: string = 'play_shuffle';
+const KEY_FAST_SPEED: string = 'play_fast_speed';
 
 export class AppSettings {
   private static getStore(context: common.UIAbilityContext): preferences.Preferences {
@@ -93,6 +94,26 @@ export class AppSettings {
       return store.getSync(KEY_SHUFFLE, false) as boolean;
     } catch (error) {
       return false;
+    }
+  }
+
+  static saveFastSpeed(context: common.UIAbilityContext, speed: number): void {
+    try {
+      const store = AppSettings.getStore(context);
+      store.putSync(KEY_FAST_SPEED, speed);
+      store.flushSync();
+    } catch (error) {
+      return;
+    }
+  }
+
+  static loadFastSpeed(context: common.UIAbilityContext): number {
+    try {
+      const store = AppSettings.getStore(context);
+      const speed = store.getSync(KEY_FAST_SPEED, 2.0) as number;
+      return speed > 0 ? speed : 2.0;
+    } catch (error) {
+      return 2.0;
     }
   }
 }

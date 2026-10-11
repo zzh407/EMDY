@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
-import { window } from '@kit.ArkUI';
+import { display, window } from '@kit.ArkUI';
 import { AppSettings } from '../service/AppSettings';
+import { FavoriteStore } from '../service/FavoriteStore';
 import { EmbyClient, EmbyVideoQuery } from '../service/EmbyClient';
 import { SessionStore } from '../service/SessionStore';
 import { EmbyLibrary, EmbyPlaybackMode, EmbySession, EmbyVideo, EmbyVideoPage, EmbyViewsSummary } from '../model/EmbyModels';
@@ -14,18 +15,35 @@ struct ShortVideoCard {
   @Prop @Watch('onPlayModeChanged') playMode: string = 'off';
   @Prop @Watch('onImmersiveChanged') immersive: boolean = true;
   @Prop controlsHidden: boolean = false;
+  @Prop fastSpeed: number = 2.0;
   onTogglePlayMode: (hint: string) => void = () => {};
   onToggleImmersive: (hint: string) => void = () => {};
   onToggleMute: (hint: string) => void = () => {};
   onHideControls: () => void = () => {};
   onPlaybackEnd: () => void = () => {};
+  onToggleFavorite: (item: EmbyVideo) => void = () => {};
+  @Prop @Watch('onFavoriteChanged') isFavorite: boolean = false;
   @State isPlaying: boolean = false;
   @State hasStarted: boolean = false;
   @State hasError: boolean = false;
   @State modeIndex: number = 0;
   @State currentSrc: string = '';
+  @State currentSpeed: number = 1.0;
+  @State isBoosting: boolean = false;
+  @State showProgress: boolean = false;
+  @State progressValue: number = 0;
+  @State progressMax: number = 0;
+  @State isSeeking: boolean = false;
   private controller: VideoController = new VideoController();
   private lastItemId: string = '';
+  private progressHideTimer: number = 0;
+  private lastSeekTime: number = 0;
+  @State isScrubbing: boolean = false;
+  @State scrubValue: number = 0;
+  @State showScrubFeedback: boolean = false;
+  private scrubStartProgress: number = 0;
+  private screenW: number = 0;
+  private favoriteHeartCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private playModeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private fullscreenCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private hideEyeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
@@ -77,6 +95,16 @@ struct ShortVideoCard {
       this.lastItemId = this.item.id;
       this.modeIndex = 0;
       this.syncSource();
+      this.progressValue = 0;
+      this.progressMax = 0;
+      this.showProgress = false;
+      this.isSeeking = false;
+      this.currentSpeed = 1.0;
+      this.isBoosting = false;
+      this.lastSeekTime = 0;
+      this.isScrubbing = false;
+      this.showScrubFeedback = false;
+      this.clearProgressHide();
     }
     if (this.active) {
       this.hasStarted = false;
@@ -183,7 +211,7 @@ struct ShortVideoCard {
   }
 
   private playModeHint(): string {
-    return this.playMode === 'shuffle' ? '播放模式：随机播放' : '播放模式：顺序播放';
+    return this.playMode === 'shuffle' ? '播放模式：顺序播放' : '播放模式：随机播放';
   }
 
   @Builder
@@ -236,6 +264,10 @@ struct ShortVideoCard {
 
   private onMutedChanged(): void {
     this.paintMuteIcon();
+  }
+
+  private onFavoriteChanged(): void {
+    this.paintFavoriteHeart();
   }
 
   private beginIcon(ctx: CanvasRenderingContext2D, color: string): void {
@@ -395,7 +427,165 @@ struct ShortVideoCard {
     return `兼容模式：${this.item.labelOf(modes[nextIndex])}`;
   }
 
+  private formatTime(seconds: number): string {
+    if (seconds <= 0) {
+      return '00:00';
+    }
+    const total: number = Math.floor(seconds);
+    const h: number = Math.floor(total / 3600);
+    const remainingSeconds: number = total % 3600;
+    const m: number = Math.floor(remainingSeconds / 60);
+    const s: number = total % 60;
+    const mm: string = m < 10 ? `0${m}` : `${m}`;
+    const ss: string = s < 10 ? `0${s}` : `${s}`;
+    if (h > 0) {
+      const hh: string = h < 10 ? `0${h}` : `${h}`;
+      return `${hh}:${mm}:${ss}`;
+    }
+    return `${mm}:${ss}`;
+  }
+
+  private clearProgressHide(): void {
+    if (this.progressHideTimer !== 0) {
+      clearTimeout(this.progressHideTimer);
+      this.progressHideTimer = 0;
+    }
+  }
+
+  private scheduleHideProgress(): void {
+    this.clearProgressHide();
+    this.progressHideTimer = setTimeout(() => {
+      this.showProgress = false;
+      this.progressHideTimer = 0;
+    }, 1200);
+  }
+
+  private seekTo(value: number): void {
+    if (this.progressMax <= 0) {
+      return;
+    }
+    this.progressValue = value;
+    this.lastSeekTime = Date.now();
+    this.controller.setCurrentTime(value);
+  }
+
+  private endBoost(): void {
+    this.isBoosting = false;
+    this.currentSpeed = 1.0;
+  }
+
+  private beginScrub(): void {
+    if (this.progressMax <= 0) {
+      return;
+    }
+    try {
+      const displayClass = display.getDefaultDisplaySync();
+      const density = displayClass.densityPixels > 0 ? displayClass.densityPixels : 1;
+      this.screenW = displayClass.width / density;
+    } catch (error) {
+      this.screenW = 360;
+    }
+    this.isSeeking = true;
+    this.isScrubbing = true;
+    this.scrubStartProgress = this.progressValue;
+    this.scrubValue = this.progressValue;
+    this.showProgress = true;
+    this.showScrubFeedback = true;
+    this.clearProgressHide();
+  }
+
+  private updateScrub(deltaVp: number): void {
+    if (!this.isScrubbing || this.progressMax <= 0) {
+      return;
+    }
+    if (this.screenW <= 0) {
+      return;
+    }
+    const deltaSeconds = deltaVp / this.screenW * this.progressMax;
+    const next = this.scrubStartProgress + deltaSeconds;
+    this.scrubValue = next < 0 ? 0 : (next > this.progressMax ? this.progressMax : next);
+  }
+
+  private endScrub(): void {
+    if (!this.isScrubbing) {
+      return;
+    }
+    this.isScrubbing = false;
+    this.showScrubFeedback = false;
+    this.seekTo(this.scrubValue);
+    this.isSeeking = false;
+    this.scheduleHideProgress();
+  }
+
+  private favoriteActive(): boolean {
+    return this.isFavorite;
+  }
+
+  private paintFavoriteHeart(): void {
+    const ctx = this.favoriteHeartCanvas;
+    if (ctx.width <= 0) {
+      return;
+    }
+    const active = this.favoriteActive();
+    ctx.clearRect(0, 0, ctx.width, ctx.height);
+    const s = ctx.width / 28;
+    ctx.save();
+    ctx.scale(s, s);
+    ctx.strokeStyle = active ? '#FF5E7A' : '#FFFFFF';
+    ctx.fillStyle = active ? '#FF5E7A' : 'rgba(0,0,0,0)';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(14, 23);
+    ctx.bezierCurveTo(6, 17, 4, 12, 4, 9);
+    ctx.bezierCurveTo(4, 5.7, 6.6, 4, 9, 4);
+    ctx.bezierCurveTo(11, 4, 13, 5.2, 14, 7.5);
+    ctx.bezierCurveTo(15, 5.2, 17, 4, 19, 4);
+    ctx.bezierCurveTo(21.4, 4, 24, 5.7, 24, 9);
+    ctx.bezierCurveTo(24, 12, 22, 17, 14, 23);
+    ctx.closePath();
+    if (active) {
+      ctx.fill();
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  @Builder
+  private progressBar() {
+    Row({ space: 8 }) {
+      Text(this.formatTime(this.isScrubbing ? this.scrubValue : this.progressValue))
+        .fontSize(11)
+        .fontColor(Color.White)
+      Stack({ alignContent: Alignment.Start }) {
+        Row()
+          .width('100%')
+          .height(4)
+          .borderRadius(2)
+          .backgroundColor('#33FFFFFF')
+        Row()
+          .width(this.progressMax > 0
+            ? `${((this.isScrubbing ? this.scrubValue : this.progressValue) / this.progressMax) * 100}%`
+            : '0%')
+          .height(4)
+          .borderRadius(2)
+          .backgroundColor('#5B74F6')
+      }
+      .layoutWeight(1)
+      .hitTestBehavior(HitTestMode.None)
+      Text(this.formatTime(this.progressMax))
+        .fontSize(11)
+        .fontColor(Color.White)
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, bottom: 6 })
+    .visibility(this.showProgress ? Visibility.Visible : Visibility.None)
+    .hitTestBehavior(HitTestMode.Transparent)
+  }
+
   aboutToDisappear(): void {
+    this.clearProgressHide();
     this.controller.stop();
   }
 
@@ -410,6 +600,7 @@ struct ShortVideoCard {
 
       Video({
         src: this.currentSrc,
+        currentProgressRate: this.currentSpeed,
         previewUri: this.item.imageUrl,
         controller: this.controller
       })
@@ -436,7 +627,74 @@ struct ShortVideoCard {
           this.isPlaying = false;
           this.hasError = true;
         })
+        .onPrepared((event: PreparedInfo) => {
+          if (event.duration > 0) {
+            this.progressMax = event.duration;
+          }
+        })
+        .onUpdate((event: PlaybackInfo) => {
+          if (this.isSeeking) {
+            return;
+          }
+          if (this.lastSeekTime > 0 && Date.now() - this.lastSeekTime < 300) {
+            return;
+          }
+          this.lastSeekTime = 0;
+          this.progressValue = event.time;
+        })
         .onClick(() => this.togglePlayback())
+        .gesture(
+          LongPressGesture({ repeat: false, duration: 400 })
+            .onAction(() => {
+              if (!this.isPlaying || this.fastSpeed <= 1.0) {
+                return;
+              }
+              this.currentSpeed = this.fastSpeed;
+              this.isBoosting = true;
+            })
+            .onActionEnd(() => this.endBoost())
+            .onActionCancel(() => this.endBoost())
+        )
+        .gesture(
+          PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 12 })
+            .onActionStart(() => this.beginScrub())
+            .onActionUpdate((event: GestureEvent) => this.updateScrub(event.offsetX))
+            .onActionEnd(() => this.endScrub())
+            .onActionCancel(() => this.endScrub())
+        )
+
+      if (this.isScrubbing) {
+        Column({ space: 2 }) {
+          Text(`${this.formatTime(this.scrubValue)} / ${this.formatTime(this.progressMax)}`)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Color.White)
+          Text('松手跳转到此时间')
+            .fontSize(10)
+        }
+        .alignItems(HorizontalAlign.Center)
+        .padding({ left: 18, right: 18, top: 12, bottom: 12 })
+        .borderRadius(16)
+        .backgroundColor('#66000000')
+        .hitTestBehavior(HitTestMode.None)
+      }
+
+      if (this.isBoosting && this.currentSpeed > 1.0) {
+        Column({ space: 2 }) {
+          Text(`${this.currentSpeed.toFixed(1)}x`)
+            .fontSize(24)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Color.White)
+          Text('倍速播放中')
+            .fontSize(11)
+            .fontColor('#B8FFFFFF')
+        }
+        .alignItems(HorizontalAlign.Center)
+        .padding({ left: 22, right: 22, top: 14, bottom: 14 })
+        .borderRadius(18)
+        .backgroundColor('#66000000')
+        .hitTestBehavior(HitTestMode.None)
+      }
 
       if (this.active && !this.isPlaying && this.hasStarted && !this.hasError) {
         Button('播放')
@@ -478,6 +736,7 @@ struct ShortVideoCard {
 
       Column() {
         Blank()
+        this.progressBar()
         this.itemCaption(this.bottomSafePadding)
       }
       .width('100%')
@@ -487,6 +746,23 @@ struct ShortVideoCard {
       if (!this.controlsHidden) {
         Column() {
           Column({ space: 14 }) {
+            Column() {
+              Canvas(this.favoriteHeartCanvas)
+                .width(28)
+                .height(28)
+                .onReady(() => {
+                  this.paintFavoriteHeart();
+                })
+            }
+            .width(48)
+            .height(48)
+            .justifyContent(FlexAlign.Center)
+            .borderRadius(24)
+            .backgroundColor(this.favoriteActive() ? '#59FF5E7A' : '#66000000')
+            .onClick(() => {
+              this.onToggleFavorite(this.item);
+            })
+
             Column() {
               this.playModeButtonIcon()
             }
@@ -566,6 +842,7 @@ struct Index {
   @State rememberLogin: boolean = false;
   @State hideCollections: boolean = false;
   @State shufflePlayback: boolean = false;
+  @State fastSpeed: number = 2.0;
   @State optionsVisible: boolean = false;
   @State topSafePadding: number = 0;
   @State bottomSafePadding: number = 0;
@@ -580,6 +857,7 @@ struct Index {
   private deviceId: string = '';
   private client: EmbyClient | null = null;
   private hintTimer: number = 0;
+  @State private favorites: Array<EmbyVideo> = [];
   private restoreEyeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private swiperController: SwiperController = new SwiperController();
   private feedSourceCount: number = 0;
@@ -643,6 +921,8 @@ struct Index {
     this.applyImmersiveMode();
     this.deviceId = SessionStore.getOrCreateDeviceId(context);
     this.hideCollections = AppSettings.loadHideCollections(context);
+    this.fastSpeed = AppSettings.loadFastSpeed(context);
+    this.favorites = FavoriteStore.load(context);
     const savedLogin: Array<string> = AppSettings.loadLogin(context);
     this.rememberLogin = savedLogin[0] === '1';
     const savedSession = SessionStore.load(context);
@@ -672,10 +952,14 @@ struct Index {
     }
     try {
       const libraries: Array<EmbyLibrary> = await client.getLibraries();
+      libraries.unshift(new EmbyLibrary('favorites', '喜欢', 'favorites'));
       this.libraries = libraries;
       this.applyLibrarySelection(libraries, this.selectedLibraryId);
     } catch (error) {
-      this.libraries = [new EmbyLibrary('', '全部媒体库', 'all')];
+      this.libraries = [
+        new EmbyLibrary('favorites', '喜欢', 'favorites'),
+        new EmbyLibrary('', '全部媒体库', 'all')
+      ];
     }
   }
 
@@ -689,6 +973,31 @@ struct Index {
     const target = matched ? matched as EmbyLibrary : libraries[0];
     this.selectedLibraryId = target.id;
     this.selectedLibraryName = target.name;
+  }
+
+  private isFavoriteLibrary(): boolean {
+    return this.selectedLibraryId === 'favorites';
+  }
+
+  private isFavoriteVideo(video: EmbyVideo): boolean {
+    return this.favorites.some((item: EmbyVideo) => item.id === video.id);
+  }
+
+  private toggleFavorite(item: EmbyVideo): void {
+    const index = this.favorites.findIndex((video: EmbyVideo) => video.id === item.id);
+    if (index >= 0) {
+      this.favorites.splice(index, 1);
+      this.showHint('已取消喜欢');
+    } else {
+      this.favorites.push(item);
+      this.showHint('已加入喜欢');
+    }
+    FavoriteStore.save(this.getAbilityContext(), this.favorites);
+    if (this.isFavoriteLibrary()) {
+      this.videos = this.favorites.slice();
+      this.hasMore = false;
+      this.totalRecordCount = this.videos.length;
+    }
   }
 
   private selectLibrary(library: EmbyLibrary): void {
@@ -777,6 +1086,30 @@ struct Index {
           .padding({ left: 6, right: 6, top: 10, bottom: 10 })
         }
         .width('100%')
+
+        Column({ space: 8 }) {
+          Text('长按屏幕加速倍速')
+            .fontSize(13)
+            .fontColor('#B8BDCA')
+            .width('100%')
+          Row({ space: 8 }) {
+            ForEach(this.fastSpeedOptions(), (speed: number) => {
+              Text(`${speed}x`)
+                .fontSize(13)
+                .fontColor(this.fastSpeed === speed ? Color.White : '#B8BDCA')
+                .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+                .borderRadius(14)
+                .backgroundColor(this.fastSpeed === speed ? '#5B74F6' : '#1E2333')
+                .onClick(() => {
+                  this.fastSpeed = speed;
+                  AppSettings.saveFastSpeed(this.getAbilityContext(), speed);
+                })
+            }, (speed: number) => `${speed}`)
+          }
+          .width('100%')
+        }
+        .width('100%')
+        .margin({ top: 4 })
 
         Row({ space: 10 }) {
           Button('更换服务器')
@@ -929,6 +1262,15 @@ struct Index {
     if (client === null || this.isLoading) {
       return;
     }
+    if (this.isFavoriteLibrary()) {
+      if (reset) {
+        this.videos = this.favorites.slice();
+        this.totalRecordCount = this.favorites.length;
+        this.hasMore = false;
+        this.currentIndex = 0;
+      }
+      return;
+    }
     this.isLoading = true;
     this.errorMessage = '';
     if (reset) {
@@ -1016,6 +1358,10 @@ struct Index {
     return this.shufflePlayback ? 'shuffle' : 'off';
   }
 
+  private fastSpeedOptions(): Array<number> {
+    return [1.25, 1.5, 1.75, 2.0, 3.0];
+  }
+
   private feedCounter(): string {
     const video = this.currentIndex >= 0 && this.currentIndex < this.videos.length
       ? this.videos[this.currentIndex] : null;
@@ -1067,6 +1413,12 @@ struct Index {
   private async loadMediaListPage(): Promise<void> {
     const client = this.client;
     if (client === null || this.mediaListLoading || !this.mediaListHasMore) {
+      return;
+    }
+    if (this.isFavoriteLibrary()) {
+      this.mediaListItems = this.favorites.slice();
+      this.mediaListTotal = this.favorites.length;
+      this.mediaListHasMore = false;
       return;
     }
     this.mediaListLoading = true;
@@ -1369,6 +1721,7 @@ struct Index {
               playMode: this.playMode(),
               immersive: this.immersive,
               controlsHidden: this.controlsHidden,
+              fastSpeed: this.fastSpeed,
               onTogglePlayMode: (hint: string) => {
                 this.togglePlayMode();
                 this.showHint(hint);
@@ -1385,7 +1738,9 @@ struct Index {
                 this.controlsHidden = true;
                 this.showHint('已隐藏所有按钮');
               },
-              onPlaybackEnd: () => this.handlePlaybackEnd()
+              onPlaybackEnd: () => this.handlePlaybackEnd(),
+              onToggleFavorite: (item: EmbyVideo) => this.toggleFavorite(item),
+              isFavorite: this.isFavoriteVideo(item)
             })
           }, (item: EmbyVideo) => item.id)
         }
@@ -1592,6 +1947,15 @@ struct Index {
             .backgroundColor('#99000000')
             .borderRadius(4)
             .margin({ right: 4, bottom: 4 })
+        }
+        if (this.isFavoriteVideo(item)) {
+          Text('♥')
+            .fontSize(11)
+            .fontColor('#FF5E7A')
+            .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+            .backgroundColor('#99000000')
+            .borderRadius(4)
+            .margin({ left: 4, bottom: 4 })
         }
         if (this.isCurrentPlaying(item)) {
           Row({ space: 4 }) {

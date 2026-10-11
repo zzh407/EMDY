@@ -22,6 +22,7 @@ struct ShortVideoCard {
   onHideControls: () => void = () => {};
   onPlaybackEnd: () => void = () => {};
   onToggleFavorite: (item: EmbyVideo) => void = () => {};
+  onOpenAuthor: (item: EmbyVideo) => void = () => {};
   @Prop @Watch('onFavoriteChanged') isFavorite: boolean = false;
   @State isPlaying: boolean = false;
   @State hasStarted: boolean = false;
@@ -38,6 +39,9 @@ struct ShortVideoCard {
   private lastItemId: string = '';
   private progressHideTimer: number = 0;
   private lastSeekTime: number = 0;
+  private lastLiveSeekTime: number = 0;
+  private lastLiveSeekTarget: number = -1;
+  private scrubWasPlaying: boolean = false;
   @State isScrubbing: boolean = false;
   @State scrubValue: number = 0;
   @State showScrubFeedback: boolean = false;
@@ -102,6 +106,8 @@ struct ShortVideoCard {
       this.currentSpeed = 1.0;
       this.isBoosting = false;
       this.lastSeekTime = 0;
+      this.lastLiveSeekTime = 0;
+      this.lastLiveSeekTarget = -1;
       this.isScrubbing = false;
       this.showScrubFeedback = false;
       this.clearProgressHide();
@@ -137,6 +143,7 @@ struct ShortVideoCard {
             .borderRadius(23)
             .objectFit(ImageFit.Cover)
             .alt($r('app.media.startIcon'))
+            .onClick(() => this.onOpenAuthor(this.item))
         } else {
           Stack({ alignContent: Alignment.Center }) {
             Text(this.item.authorInitial())
@@ -145,6 +152,7 @@ struct ShortVideoCard {
               .fontColor(Color.White)
           }
           .width(46)
+          .onClick(() => this.onOpenAuthor(this.item))
           .height(46)
           .borderRadius(23)
           .backgroundColor('#2A2F3D')
@@ -158,6 +166,7 @@ struct ShortVideoCard {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .width('100%')
+            .onClick(() => this.onOpenAuthor(this.item))
           if (this.item.name.length > 0) {
             Row({ space: 8 }) {
               Text(this.item.name)
@@ -460,13 +469,18 @@ struct ShortVideoCard {
     }, 1200);
   }
 
+  private maxSeekTarget(): number {
+    return this.progressMax > 1 ? this.progressMax - 1 : this.progressMax;
+  }
+
   private seekTo(value: number): void {
     if (this.progressMax <= 0) {
       return;
     }
-    this.progressValue = value;
+    const target = value > this.maxSeekTarget() ? this.maxSeekTarget() : value;
+    this.progressValue = target;
     this.lastSeekTime = Date.now();
-    this.controller.setCurrentTime(value);
+    this.controller.setCurrentTime(target);
   }
 
   private endBoost(): void {
@@ -485,10 +499,16 @@ struct ShortVideoCard {
     } catch (error) {
       this.screenW = 360;
     }
+    this.scrubWasPlaying = this.isPlaying;
+    if (this.scrubWasPlaying) {
+      this.controller.pause();
+    }
     this.isSeeking = true;
     this.isScrubbing = true;
     this.scrubStartProgress = this.progressValue;
     this.scrubValue = this.progressValue;
+    this.lastLiveSeekTime = 0;
+    this.lastLiveSeekTarget = -1;
     this.showProgress = true;
     this.showScrubFeedback = true;
     this.clearProgressHide();
@@ -503,7 +523,28 @@ struct ShortVideoCard {
     }
     const deltaSeconds = deltaVp / this.screenW * this.progressMax;
     const next = this.scrubStartProgress + deltaSeconds;
-    this.scrubValue = next < 0 ? 0 : (next > this.progressMax ? this.progressMax : next);
+    const clamped = next < 0 ? 0 : (next > this.progressMax ? this.progressMax : next);
+    if (clamped !== this.scrubValue) {
+      this.scrubValue = clamped;
+      this.requestLiveSeek(clamped);
+    }
+  }
+
+  private requestLiveSeek(target: number): void {
+    const now = Date.now();
+    const limit = this.maxSeekTarget();
+    const finalTarget = target > limit ? limit : target;
+    if (this.lastLiveSeekTarget >= 0 && Math.abs(finalTarget - this.lastLiveSeekTarget) < 1) {
+      return;
+    }
+    if (now - this.lastLiveSeekTime < 400) {
+      return;
+    }
+    this.lastLiveSeekTime = now;
+    this.lastLiveSeekTarget = finalTarget;
+    this.lastSeekTime = now;
+    this.controller.setCurrentTime(finalTarget, SeekMode.PreviousKeyframe);
+    this.progressValue = finalTarget;
   }
 
   private endScrub(): void {
@@ -512,8 +553,13 @@ struct ShortVideoCard {
     }
     this.isScrubbing = false;
     this.showScrubFeedback = false;
+    this.lastLiveSeekTime = 0;
+    this.lastLiveSeekTarget = -1;
     this.seekTo(this.scrubValue);
     this.isSeeking = false;
+    if (this.scrubWasPlaying) {
+      this.controller.start();
+    }
     this.scheduleHideProgress();
   }
 
@@ -669,7 +715,7 @@ struct ShortVideoCard {
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
             .fontColor(Color.White)
-          Text('松手跳转到此时间')
+          Text('拖动预览中，松手精确跳转')
             .fontSize(10)
         }
         .alignItems(HorizontalAlign.Center)
@@ -858,6 +904,10 @@ struct Index {
   private client: EmbyClient | null = null;
   private hintTimer: number = 0;
   @State private favorites: Array<EmbyVideo> = [];
+  @State private filterAuthorName: string = '';
+  private resumeLibraryId: string = '';
+  private resumeLibraryName: string = '';
+  private resumeShuffle: boolean = false;
   private restoreEyeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private swiperController: SwiperController = new SwiperController();
   private feedSourceCount: number = 0;
@@ -979,6 +1029,52 @@ struct Index {
     return this.selectedLibraryId === 'favorites';
   }
 
+  private isAuthorFiltered(): boolean {
+    return this.filterAuthorName.length > 0;
+  }
+
+  private async openAuthorFeed(item: EmbyVideo): Promise<void> {
+    const client = this.client;
+    if (client === null) {
+      this.showHint('尚未连接服务器');
+      return;
+    }
+    const author = item.authorName.length > 0 ? item.authorName : '';
+    if (this.filterAuthorName === author) {
+      return;
+    }
+    if (!this.isAuthorFiltered()) {
+      this.resumeLibraryId = this.selectedLibraryId;
+      this.resumeLibraryName = this.selectedLibraryName;
+      this.resumeShuffle = this.shufflePlayback;
+    }
+    this.filterAuthorName = author;
+    if (this.shufflePlayback) {
+      this.shufflePlayback = false;
+      AppSettings.saveShuffle(this.getAbilityContext(), false);
+    }
+    this.selectedLibraryId = '';
+    this.selectedLibraryName = author.length > 0 ? `@${author}` : '未标注作者';
+    this.showHint(author.length > 0 ? `正在筛选 @${author} 的视频` : '正在筛选未标注作者的视频');
+    this.mediaListVisible = false;
+    await this.loadVideos(true);
+  }
+
+  private async clearAuthorFilter(): Promise<void> {
+    if (!this.isAuthorFiltered()) {
+      return;
+    }
+    this.filterAuthorName = '';
+    this.selectedLibraryId = this.resumeLibraryId;
+    this.selectedLibraryName = this.resumeLibraryName;
+    if (this.resumeShuffle && !this.shufflePlayback) {
+      this.shufflePlayback = true;
+      AppSettings.saveShuffle(this.getAbilityContext(), true);
+    }
+    this.showHint('已恢复全部视频');
+    await this.loadVideos(true);
+  }
+
   private isFavoriteVideo(video: EmbyVideo): boolean {
     return this.favorites.some((item: EmbyVideo) => item.id === video.id);
   }
@@ -1001,6 +1097,9 @@ struct Index {
   }
 
   private selectLibrary(library: EmbyLibrary): void {
+    if (this.isAuthorFiltered()) {
+      this.filterAuthorName = '';
+    }
     this.selectedLibraryId = library.id;
     this.selectedLibraryName = library.name;
     this.libraryPickerVisible = false;
@@ -1268,6 +1367,49 @@ struct Index {
         this.totalRecordCount = this.favorites.length;
         this.hasMore = false;
         this.currentIndex = 0;
+      }
+      return;
+    }
+    if (this.isAuthorFiltered()) {
+      this.isLoading = true;
+      this.errorMessage = '';
+      if (reset) {
+        this.currentIndex = 0;
+        this.videos = [];
+        this.totalRecordCount = 0;
+        this.hasMore = true;
+        this.debugInfo = '';
+        this.feedSourceCount = 0;
+      }
+      try {
+        const author = this.filterAuthorName;
+        const collected: Array<EmbyVideo> = [];
+        const query = new EmbyVideoQuery();
+        query.libraryId = '';
+        query.hideCollections = this.hideCollections;
+        let start = 0;
+        let guard = 0;
+        while (guard < 100) {
+          const page: EmbyVideoPage = await client.getVideos(start, this.pageSize, query);
+          const filtered = page.items.filter((video: EmbyVideo) => video.authorName === author);
+          collected.push(...filtered);
+          if (page.items.length === 0 || start + page.items.length >= page.totalRecordCount) {
+            break;
+          }
+          start += page.items.length;
+          guard++;
+        }
+        this.videos = collected;
+        this.totalRecordCount = collected.length;
+        this.hasMore = false;
+        this.feedSourceCount = collected.length;
+        if (collected.length === 0) {
+          this.showHint('未找到该作者的其他视频');
+        }
+      } catch (error) {
+        this.errorMessage = this.describeError(error as Error);
+      } finally {
+        this.isLoading = false;
       }
       return;
     }
@@ -1740,6 +1882,7 @@ struct Index {
               },
               onPlaybackEnd: () => this.handlePlaybackEnd(),
               onToggleFavorite: (item: EmbyVideo) => this.toggleFavorite(item),
+              onOpenAuthor: (item: EmbyVideo) => this.openAuthorFeed(item),
               isFavorite: this.isFavoriteVideo(item)
             })
           }, (item: EmbyVideo) => item.id)
@@ -1837,14 +1980,25 @@ struct Index {
             .fontSize(12)
             .fontColor('#D9FFFFFF')
         }
-        Button('全部媒体')
-          .height(34)
-          .fontSize(12)
-          .fontColor(Color.White)
-          .backgroundColor('#66000000')
-          .borderRadius(17)
-          .padding({ left: 12, right: 12 })
-          .onClick(() => this.openMediaList())
+        if (this.isAuthorFiltered()) {
+          Button('全部视频')
+            .height(34)
+            .fontSize(12)
+            .fontColor(Color.White)
+            .backgroundColor('#5B74F6')
+            .borderRadius(17)
+            .padding({ left: 12, right: 12 })
+            .onClick(() => this.clearAuthorFilter())
+        } else {
+          Button('全部媒体')
+            .height(34)
+            .fontSize(12)
+            .fontColor(Color.White)
+            .backgroundColor('#66000000')
+            .borderRadius(17)
+            .padding({ left: 12, right: 12 })
+            .onClick(() => this.openMediaList())
+        }
       }
       .width('100%')
       .constraintSize({ minHeight: 46 })

@@ -199,8 +199,18 @@ export class EmbyClient {
     return new EmbyVideoPage([], 0);
   }
 
-  async getViewsSummary(): Promise<EmbyViewsSummary> {
-    if (this.accessToken.length === 0 || this.userId.length === 0) {
+  async deleteItem(itemId: string): Promise<void> {
+    if (itemId.length === 0) {
+      throw new Error('视频 ID 为空，无法删除');
+    }
+    if (this.accessToken.length === 0) {
+      throw new Error('登录状态已失效，请重新登录');
+    }
+    const path = `/Items/${encodeURIComponent(itemId)}`;
+    await this.request(path, http.RequestMethod.DELETE, '', true);
+  }
+
+  async getViewsSummary(): Promise<EmbyViewsSummary> {    if (this.accessToken.length === 0 || this.userId.length === 0) {
       return { total: 0, text: '登录状态已失效' };
     }
     return this.describeLibraries();
@@ -451,6 +461,12 @@ export class EmbyClient {
       if (response.responseCode < 200 || response.responseCode >= 300) {
         if (response.responseCode === 401) {
           throw new Error('用户名、密码或登录令牌无效');
+        }
+        if (response.responseCode === 403) {
+          throw new Error('没有删除权限，请确认账号拥有 Emby 删除媒体权限');
+        }
+        if (response.responseCode === 404) {
+          throw new Error('视频不存在或服务器不支持该操作');
         }
         throw new Error(`Emby 服务器返回错误：${response.responseCode}`);
       }

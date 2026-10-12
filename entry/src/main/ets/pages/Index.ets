@@ -23,7 +23,9 @@ struct ShortVideoCard {
   onPlaybackEnd: () => void = () => {};
   onToggleFavorite: (item: EmbyVideo) => void = () => {};
   onOpenAuthor: (item: EmbyVideo) => void = () => {};
+  onDeleteVideo: (item: EmbyVideo) => void = () => {};
   @Prop @Watch('onFavoriteChanged') isFavorite: boolean = false;
+  @Prop @Watch('onDeletePendingChanged') deletePending: boolean = false;
   @State isPlaying: boolean = false;
   @State hasStarted: boolean = false;
   @State hasError: boolean = false;
@@ -48,6 +50,7 @@ struct ShortVideoCard {
   private scrubStartProgress: number = 0;
   private screenW: number = 0;
   private favoriteHeartCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
+  private trashCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private playModeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private fullscreenCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
   private hideEyeCanvas: CanvasRenderingContext2D = new CanvasRenderingContext2D();
@@ -71,6 +74,7 @@ struct ShortVideoCard {
   aboutToAppear(): void {
     this.lastItemId = this.item.id;
     this.syncSource();
+    this.paintTrashIcon();
   }
 
   private tryNextMode(): void {
@@ -489,7 +493,7 @@ struct ShortVideoCard {
   }
 
   private beginScrub(): void {
-    if (this.progressMax <= 0) {
+    if (this.deletePending || this.progressMax <= 0) {
       return;
     }
     try {
@@ -534,10 +538,10 @@ struct ShortVideoCard {
     const now = Date.now();
     const limit = this.maxSeekTarget();
     const finalTarget = target > limit ? limit : target;
-    if (this.lastLiveSeekTarget >= 0 && Math.abs(finalTarget - this.lastLiveSeekTarget) < 1) {
+    if (this.lastLiveSeekTarget >= 0 && Math.abs(finalTarget - this.lastLiveSeekTarget) < 0.2) {
       return;
     }
-    if (now - this.lastLiveSeekTime < 400) {
+    if (now - this.lastLiveSeekTime < 250) {
       return;
     }
     this.lastLiveSeekTime = now;
@@ -565,6 +569,50 @@ struct ShortVideoCard {
 
   private favoriteActive(): boolean {
     return this.isFavorite;
+  }
+
+  private onDeletePendingChanged(): void {
+    this.paintTrashIcon();
+  }
+
+  private paintTrashIcon(): void {
+    const ctx = this.trashCanvas;
+    if (ctx.width <= 0) {
+      return;
+    }
+    const color = this.deletePending ? 'rgba(255,59,48,0.45)' : '#FF3B30';
+    this.beginIcon(ctx, color);
+    // 桶盖横线
+    ctx.beginPath();
+    ctx.moveTo(4.5, 7.5);
+    ctx.lineTo(19.5, 7.5);
+    ctx.stroke();
+    // 盖子提手
+    ctx.beginPath();
+    ctx.moveTo(9.8, 7.5);
+    ctx.lineTo(9.8, 5.2);
+    ctx.moveTo(14.2, 7.5);
+    ctx.lineTo(14.2, 5.2);
+    ctx.moveTo(9.8, 5.2);
+    ctx.lineTo(14.2, 5.2);
+    ctx.stroke();
+    // 桶身
+    ctx.beginPath();
+    ctx.moveTo(6.6, 7.5);
+    ctx.lineTo(7.8, 20.6);
+    ctx.moveTo(17.4, 7.5);
+    ctx.lineTo(16.2, 20.6);
+    ctx.moveTo(8.6, 20.6);
+    ctx.lineTo(15.4, 20.6);
+    ctx.stroke();
+    // 桶身竖纹
+    ctx.beginPath();
+    ctx.moveTo(10.6, 10.5);
+    ctx.lineTo(11.2, 17.8);
+    ctx.moveTo(13.4, 10.5);
+    ctx.lineTo(12.8, 17.8);
+    ctx.stroke();
+    this.endIcon(ctx);
   }
 
   private paintFavoriteHeart(): void {
@@ -715,8 +763,6 @@ struct ShortVideoCard {
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
             .fontColor(Color.White)
-          Text('拖动预览中，松手精确跳转')
-            .fontSize(10)
         }
         .alignItems(HorizontalAlign.Center)
         .padding({ left: 18, right: 18, top: 12, bottom: 12 })
@@ -742,7 +788,7 @@ struct ShortVideoCard {
         .hitTestBehavior(HitTestMode.None)
       }
 
-      if (this.active && !this.isPlaying && this.hasStarted && !this.hasError) {
+      if (this.active && !this.isPlaying && this.hasStarted && !this.hasError && !this.isScrubbing) {
         Button('播放')
           .fontSize(16)
           .fontColor(Color.White)
@@ -848,6 +894,26 @@ struct ShortVideoCard {
             .borderRadius(24)
             .backgroundColor('#66000000')
             .onClick(() => this.onHideControls())
+
+            Column() {
+              Canvas(this.trashCanvas)
+                .width(28)
+                .height(28)
+                .onReady(() => {
+                  this.paintTrashIcon();
+                })
+            }
+            .width(48)
+            .height(48)
+            .justifyContent(FlexAlign.Center)
+            .borderRadius(24)
+            .backgroundColor(this.deletePending ? '#66FF3B30' : '#66000000')
+            .opacity(this.deletePending ? 0.6 : 1)
+            .onClick(() => {
+              if (!this.deletePending) {
+                this.onDeleteVideo(this.item);
+              }
+            })
           }
           .alignItems(HorizontalAlign.Center)
           .margin({ right: 16 })
@@ -900,10 +966,22 @@ struct Index {
   @State mediaListLoading: boolean = false;
   @State mediaListHasMore: boolean = true;
   @State mediaListTotal: number = 0;
+  @State multiSelectMode: boolean = false;
+  @State selectedIds: Array<string> = [];
+  @State batchDeletePending: boolean = false;
+  private lastLongPressTime: number = 0;
   private deviceId: string = '';
   private client: EmbyClient | null = null;
   private hintTimer: number = 0;
   @State private favorites: Array<EmbyVideo> = [];
+  @State private deletePending: boolean = false;
+  @State private deleteConfirmVisible: boolean = false;
+  @State private deleteConfirmTitle: string = '';
+  @State private deleteConfirmMode: string = 'single';
+  private deleteConfirmItem: EmbyVideo = new EmbyVideo();
+  private deleteAfterAnimId: string = '';
+  private deleteAnimTimer: number = 0;
+  private reloadAfterDelete: boolean = false;
   @State private filterAuthorName: string = '';
   private resumeLibraryId: string = '';
   private resumeLibraryName: string = '';
@@ -1077,6 +1155,235 @@ struct Index {
 
   private isFavoriteVideo(video: EmbyVideo): boolean {
     return this.favorites.some((item: EmbyVideo) => item.id === video.id);
+  }
+
+  private confirmDeleteVideo(item: EmbyVideo): void {
+    if (this.deletePending) {
+      return;
+    }
+    this.deleteConfirmItem = item;
+    this.deleteConfirmMode = 'single';
+    const name = item.name;
+    this.deleteConfirmTitle = name.length > 20 ? `${name.substring(0, 20)}…` : (name.length > 0 ? name : '该视频');
+    this.deleteConfirmVisible = true;
+  }
+
+  private async deleteCurrentVideo(item: EmbyVideo): Promise<void> {
+    const client = this.client;
+    if (client === null || this.deletePending) {
+      return;
+    }
+    this.deletePending = true;
+    this.showHint('正在删除…');
+    try {
+      await client.deleteItem(item.id);
+      this.removeFavoriteRecord(item.id);
+      if (this.totalRecordCount > 0) {
+        this.totalRecordCount--;
+      }
+      const deletedIndex = this.videos.findIndex((video: EmbyVideo) => video.id === item.id);
+      if (deletedIndex < 0) {
+        this.showHint('已删除');
+        return;
+      }
+      if (this.videos.length <= 1) {
+        this.videos.splice(deletedIndex, 1);
+        this.currentIndex = 0;
+        this.showHint('已删除，正在重新加载列表');
+        await this.reloadAfterEmpty();
+        return;
+      }
+      if (deletedIndex === this.currentIndex) {
+        // 与连播跳转保持一致的滑动动画：先滑走，动画结束后再移除数据
+        const target = deletedIndex < this.videos.length - 1 ? deletedIndex + 1 : deletedIndex - 1;
+        this.deleteAfterAnimId = item.id;
+        this.swiperController.changeIndex(target, true);
+        this.deleteAnimTimer = setTimeout(() => {
+          this.deleteAnimTimer = 0;
+          this.applyPendingDelete();
+        }, 300);
+        return;
+      }
+      this.videos.splice(deletedIndex, 1);
+      if (this.currentIndex > deletedIndex) {
+        this.currentIndex--;
+        this.swiperController.changeIndex(this.currentIndex, false);
+      }
+      this.showHint('已删除');
+    } catch (error) {
+      this.showHint(`删除失败：${this.describeError(error as Error)}`);
+    } finally {
+      this.deletePending = false;
+    }
+  }
+
+  private applyPendingDelete(): void {
+    const id = this.deleteAfterAnimId;
+    this.deleteAfterAnimId = '';
+    if (id.length === 0) {
+      return;
+    }
+    const index = this.videos.findIndex((video: EmbyVideo) => video.id === id);
+    if (index < 0) {
+      return;
+    }
+    this.videos.splice(index, 1);
+    if (this.currentIndex > index) {
+      // 动画滑到了下一项：删除后该项前移到 index，无动画修正保持画面内容不变
+      this.currentIndex--;
+      this.swiperController.changeIndex(this.currentIndex, false);
+    } else if (this.currentIndex === index) {
+      this.swiperController.changeIndex(index, false);
+    }
+    this.showHint('已删除');
+  }
+
+  private async reloadAfterEmpty(): Promise<void> {
+    if (this.isLoading) {
+      // 预加载请求在飞行中，loadVideos 会被忽略，落地后再重试
+      this.reloadAfterDelete = true;
+      return;
+    }
+    await this.loadVideos(true);
+  }
+
+  private removeFavoriteRecord(id: string): void {
+    const favIndex = this.favorites.findIndex((video: EmbyVideo) => video.id === id);
+    if (favIndex >= 0) {
+      this.favorites.splice(favIndex, 1);
+      FavoriteStore.save(this.getAbilityContext(), this.favorites);
+    }
+  }
+
+  private enterMultiSelect(item: EmbyVideo): void {
+    if (this.batchDeletePending) {
+      return;
+    }
+    this.lastLongPressTime = Date.now();
+    this.multiSelectMode = true;
+    if (!this.selectedIds.includes(item.id)) {
+      this.selectedIds.push(item.id);
+    }
+  }
+
+  private exitMultiSelect(): void {
+    if (this.batchDeletePending) {
+      return;
+    }
+    this.multiSelectMode = false;
+    this.selectedIds = [];
+  }
+
+  private toggleSelect(item: EmbyVideo): void {
+    if (this.batchDeletePending) {
+      return;
+    }
+    const index = this.selectedIds.indexOf(item.id);
+    if (index >= 0) {
+      this.selectedIds.splice(index, 1);
+    } else {
+      this.selectedIds.push(item.id);
+    }
+  }
+
+  private toggleSelectAll(): void {
+    if (this.batchDeletePending) {
+      return;
+    }
+    if (this.selectedIds.length >= this.mediaListItems.length && this.mediaListItems.length > 0) {
+      this.selectedIds = [];
+    } else {
+      this.selectedIds = this.mediaListItems.map((item: EmbyVideo) => item.id);
+    }
+  }
+
+  private confirmBatchDelete(): void {
+    if (this.batchDeletePending || this.selectedIds.length === 0) {
+      return;
+    }
+    this.deleteConfirmMode = 'batch';
+    this.deleteConfirmVisible = true;
+  }
+
+  private async batchDeleteSelected(): Promise<void> {
+    const client = this.client;
+    if (client === null || this.batchDeletePending || this.selectedIds.length === 0) {
+      return;
+    }
+    const ids = this.selectedIds.slice();
+    this.batchDeletePending = true;
+    this.showHint(`正在删除 ${ids.length} 个视频…`);
+    const success: Array<string> = [];
+    let failCount = 0;
+    for (const id of ids) {
+      if (this.client === null) {
+        failCount += ids.length - success.length;
+        break;
+      }
+      try {
+        await client.deleteItem(id);
+        success.push(id);
+      } catch (error) {
+        failCount++;
+      }
+    }
+    if (success.length > 0) {
+      const deletedSet = new Set(success);
+      this.mediaListItems = this.mediaListItems.filter((item: EmbyVideo) => !deletedSet.has(item.id));
+      if (this.mediaListTotal >= success.length) {
+        this.mediaListTotal -= success.length;
+      }
+      const removedFavCount = this.favorites.filter((item: EmbyVideo) => deletedSet.has(item.id)).length;
+      if (removedFavCount > 0) {
+        this.favorites = this.favorites.filter((item: EmbyVideo) => !deletedSet.has(item.id));
+        FavoriteStore.save(this.getAbilityContext(), this.favorites);
+      }
+      if (this.totalRecordCount >= success.length) {
+        this.totalRecordCount -= success.length;
+      }
+      await this.syncFeedAfterBatchDelete(deletedSet);
+      this.selectedIds = [];
+      if (this.mediaListItems.length === 0 && this.mediaListHasMore) {
+        this.loadMediaListPage();
+      }
+    }
+    this.multiSelectMode = false;
+    this.batchDeletePending = false;
+    if (failCount > 0) {
+      this.showHint(`已删除 ${success.length} 个，${failCount} 个失败`);
+    } else {
+      this.showHint(`已删除 ${success.length} 个视频`);
+    }
+  }
+
+  private async syncFeedAfterBatchDelete(deletedSet: Set<string>): Promise<void> {
+    if (this.videos.length === 0) {
+      return;
+    }
+    const currentId = this.currentIndex >= 0 && this.currentIndex < this.videos.length
+      ? this.videos[this.currentIndex].id : '';
+    let removedBefore = 0;
+    for (let i = 0; i < this.currentIndex && i < this.videos.length; i++) {
+      if (deletedSet.has(this.videos[i].id)) {
+        removedBefore++;
+      }
+    }
+    this.videos = this.videos.filter((item: EmbyVideo) => !deletedSet.has(item.id));
+    if (currentId.length === 0) {
+      return;
+    }
+    if (deletedSet.has(currentId)) {
+      if (this.videos.length === 0) {
+        this.currentIndex = 0;
+        await this.reloadAfterEmpty();
+        return;
+      }
+      const target = this.currentIndex - removedBefore;
+      this.currentIndex = Math.max(0, Math.min(target, this.videos.length - 1));
+      this.swiperController.changeIndex(this.currentIndex, false);
+    } else {
+      this.currentIndex = Math.max(0, this.currentIndex - removedBefore);
+    }
   }
 
   private toggleFavorite(item: EmbyVideo): void {
@@ -1410,6 +1717,7 @@ struct Index {
         this.errorMessage = this.describeError(error as Error);
       } finally {
         this.isLoading = false;
+        await this.flushReloadAfterDelete();
       }
       return;
     }
@@ -1453,6 +1761,17 @@ struct Index {
       this.errorMessage = this.describeError(error as Error);
     } finally {
       this.isLoading = false;
+      await this.flushReloadAfterDelete();
+    }
+  }
+
+  private async flushReloadAfterDelete(): Promise<void> {
+    if (!this.reloadAfterDelete) {
+      return;
+    }
+    this.reloadAfterDelete = false;
+    if (this.videos.length === 0) {
+      await this.loadVideos(true);
     }
   }
 
@@ -1514,6 +1833,8 @@ struct Index {
   }
 
   private async openMediaList(): Promise<void> {
+    this.multiSelectMode = false;
+    this.selectedIds = [];
     this.mediaListVisible = true;
     this.mediaListItems = [];
     this.mediaListTotal = 0;
@@ -1581,6 +1902,8 @@ struct Index {
   }
 
   private playFromList(item: EmbyVideo): void {
+    this.multiSelectMode = false;
+    this.selectedIds = [];
     this.mediaListVisible = false;
     const index = this.videos.findIndex((video: EmbyVideo) => video.id === item.id);
     if (index >= 0) {
@@ -1883,6 +2206,8 @@ struct Index {
               onPlaybackEnd: () => this.handlePlaybackEnd(),
               onToggleFavorite: (item: EmbyVideo) => this.toggleFavorite(item),
               onOpenAuthor: (item: EmbyVideo) => this.openAuthorFeed(item),
+              onDeleteVideo: (item: EmbyVideo) => this.confirmDeleteVideo(item),
+              deletePending: this.deletePending,
               isFavorite: this.isFavoriteVideo(item)
             })
           }, (item: EmbyVideo) => item.id)
@@ -1893,6 +2218,7 @@ struct Index {
         .indicator(false)
         .cachedCount(1)
         .duration(260)
+        .enabled(!this.deletePending && this.deleteAfterAnimId.length === 0)
         .onChange((index: number) => {
           this.currentIndex = index;
           if (this.hasMore && index >= this.videos.length - 3) {
@@ -2126,6 +2452,23 @@ struct Index {
           .margin({ left: 4, top: 4 })
           .align(Alignment.TopStart)
         }
+        if (this.multiSelectMode && this.selectedIds.includes(item.id)) {
+          Row()
+            .width('100%')
+            .height('100%')
+            .backgroundColor('#595B74F6')
+          Stack({ alignContent: Alignment.Center }) {
+            Text('✓')
+              .fontSize(14)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Color.White)
+          }
+          .width(24)
+          .height(24)
+          .borderRadius(12)
+          .backgroundColor('#5B74F6')
+          .margin({ top: 6, right: 6 })
+        }
       }
       .width('100%')
       .aspectRatio(16 / 9)
@@ -2140,7 +2483,19 @@ struct Index {
         .width('100%')
     }
     .width('100%')
-    .onClick(() => this.playFromList(item))
+    .gesture(
+      LongPressGesture({ repeat: false, duration: 400 })
+        .onAction(() => this.enterMultiSelect(item))
+    )
+    .onClick(() => {
+      if (this.multiSelectMode) {
+        if (Date.now() - this.lastLongPressTime > 300) {
+          this.toggleSelect(item);
+        }
+        return;
+      }
+      this.playFromList(item);
+    })
   }
 
   @Builder
@@ -2152,27 +2507,63 @@ struct Index {
         .backgroundColor('#090A0F')
 
       Column() {
-        Row() {
-          Text(this.selectedLibraryName)
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.White)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
-          Text(this.mediaListTotal > 0 ? `共 ${this.mediaListTotal} 个视频` : '')
-            .fontSize(12)
-            .fontColor('#9DA3B2')
-            .margin({ right: 14 })
-          Text('关闭')
-            .fontSize(13)
-            .fontColor('#9DA3B2')
-            .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-            .backgroundColor('#2B2E39')
-            .borderRadius(14)
-            .onClick(() => {
-              this.mediaListVisible = false;
-            })
+        Column() {
+        if (this.multiSelectMode) {
+          Row({ space: 10 }) {
+            Text('取消')
+              .fontSize(13)
+              .fontColor('#9DA3B2')
+              .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+              .backgroundColor('#2B2E39')
+              .borderRadius(14)
+              .onClick(() => this.exitMultiSelect())
+            Text(`已选 ${this.selectedIds.length}`)
+              .fontSize(15)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Color.White)
+              .layoutWeight(1)
+              .margin({ left: 4 })
+              .maxLines(1)
+            Text(this.selectedIds.length >= this.mediaListItems.length && this.mediaListItems.length > 0
+              ? '取消全选' : '全选')
+              .fontSize(13)
+              .fontColor('#7C9CFF')
+              .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+              .backgroundColor('#1E2A4A')
+              .borderRadius(14)
+              .onClick(() => this.toggleSelectAll())
+            Text(this.selectedIds.length > 0 ? `删除(${this.selectedIds.length})` : '删除')
+              .fontSize(13)
+              .fontColor(this.selectedIds.length > 0 && !this.batchDeletePending ? '#FF5E7A' : '#667080')
+              .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+              .backgroundColor('#3A2028')
+              .borderRadius(14)
+              .onClick(() => this.confirmBatchDelete())
+          }
+        } else {
+          Row() {
+            Text(this.selectedLibraryName)
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Color.White)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+            Text(this.mediaListTotal > 0 ? `共 ${this.mediaListTotal} 个视频` : '')
+              .fontSize(12)
+              .fontColor('#9DA3B2')
+              .margin({ right: 14 })
+            Text('关闭')
+              .fontSize(13)
+              .fontColor('#9DA3B2')
+              .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+              .backgroundColor('#2B2E39')
+              .borderRadius(14)
+              .onClick(() => {
+                this.mediaListVisible = false;
+              })
+          }
+        }
         }
         .width('100%')
         .padding({ left: 16, right: 16, top: 8, bottom: 8 })
@@ -2251,6 +2642,10 @@ struct Index {
   }
 
   onBackPress(): boolean {
+    if (this.multiSelectMode) {
+      this.exitMultiSelect();
+      return true;
+    }
     if (this.mediaListVisible) {
       this.mediaListVisible = false;
       return true;
@@ -2259,12 +2654,73 @@ struct Index {
   }
 
   build() {
-    if (this.session === null) {
-      this.loginPage()
-    } else if (this.mediaListVisible) {
-      this.mediaListPage()
-    } else {
-      this.feedPage()
+    Stack({ alignContent: Alignment.Center }) {
+      if (this.session === null) {
+        this.loginPage()
+      } else if (this.mediaListVisible) {
+        this.mediaListPage()
+      } else {
+        this.feedPage()
+      }
+      this.deleteConfirmDialog()
     }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  private deleteConfirmDialog() {
+    Stack() {
+      Column({ space: 16 }) {
+        Text('删除视频')
+          .fontSize(17)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Color.White)
+        Text(this.deleteConfirmMode === 'batch' ?
+          `确定删除选中的 ${this.selectedIds.length} 个视频吗？将从 Emby 服务器永久移除，不可恢复。` :
+          `确定删除《${this.deleteConfirmTitle}》吗？将从 Emby 服务器永久移除，不可恢复。`)
+          .fontSize(13)
+          .fontColor('#B8FFFFFF')
+          .textAlign(TextAlign.Center)
+        Row({ space: 12 }) {
+          Button('取消')
+            .flexGrow(1)
+            .fontSize(14)
+            .fontColor('#A9B0C0')
+            .backgroundColor('#2B2E39')
+            .borderRadius(18)
+            .onClick(() => {
+              this.deleteConfirmVisible = false;
+            })
+          Button('删除')
+            .flexGrow(1)
+            .fontSize(14)
+            .fontColor('#FF3B30')
+            .backgroundColor('#3A2028')
+            .borderRadius(18)
+            .onClick(() => {
+              this.deleteConfirmVisible = false;
+              if (this.deleteConfirmMode === 'batch') {
+                this.batchDeleteSelected();
+              } else {
+                this.deleteCurrentVideo(this.deleteConfirmItem);
+              }
+            })
+        }
+      }
+      .padding(24)
+      .backgroundColor('#1E2230')
+      .borderRadius(20)
+      .width('84%')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#99000000')
+    .visibility(this.deleteConfirmVisible ? Visibility.Visible : Visibility.None)
+    .onClick(() => {
+      if (!this.deletePending) {
+        this.deleteConfirmVisible = false;
+      }
+    })
   }
 }

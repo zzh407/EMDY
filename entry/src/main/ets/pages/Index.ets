@@ -1207,14 +1207,22 @@ struct Index {
       this.videos.splice(deletedIndex, 1);
       if (this.currentIndex > deletedIndex) {
         this.currentIndex--;
-        this.swiperController.changeIndex(this.currentIndex, false);
+        this.syncSwiperIndex();
       }
       this.showHint('已删除');
+      this.refreshFeedTail();
     } catch (error) {
       this.showHint(`删除失败：${this.describeError(error as Error)}`);
     } finally {
       this.deletePending = false;
     }
+  }
+
+  private syncSwiperIndex(): void {
+    // 数据变化先让 ForEach 落地，下一帧再同步 Swiper，避免同帧竞争导致相邻卡片重排卡顿
+    setTimeout(() => {
+      this.swiperController.changeIndex(this.currentIndex, false);
+    }, 32);
   }
 
   private applyPendingDelete(): void {
@@ -1229,13 +1237,12 @@ struct Index {
     }
     this.videos.splice(index, 1);
     if (this.currentIndex > index) {
-      // 动画滑到了下一项：删除后该项前移到 index，无动画修正保持画面内容不变
+      // 动画滑到了下一项：删除后该项前移到 index，修正索引保持画面内容不变
       this.currentIndex--;
-      this.swiperController.changeIndex(this.currentIndex, false);
-    } else if (this.currentIndex === index) {
-      this.swiperController.changeIndex(index, false);
     }
+    this.syncSwiperIndex();
     this.showHint('已删除');
+    this.refreshFeedTail();
   }
 
   private async reloadAfterEmpty(): Promise<void> {
@@ -1245,6 +1252,60 @@ struct Index {
       return;
     }
     await this.loadVideos(true);
+  }
+
+  private async refreshFeedTail(): Promise<void> {
+    // 删除后局部增量刷新：从服务端补拉一页到列表尾部，并用权威总数修正计数。
+    // 排序为 DateCreated 倒序（稳定），删除后本地 length 与服务端偏移天然对齐。
+    const client = this.client;
+    if (client === null || this.isLoading || !this.hasMore || this.videos.length === 0) {
+      return;
+    }
+    if (this.isFavoriteLibrary() || this.isAuthorFiltered() || this.shufflePlayback) {
+      return;
+    }
+    try {
+      const query = new EmbyVideoQuery();
+      query.libraryId = this.selectedLibraryId;
+      query.hideCollections = this.hideCollections;
+      const page: EmbyVideoPage = await client.getVideos(this.videos.length, this.pageSize, query);
+      this.totalRecordCount = page.totalRecordCount;
+      if (page.items.length > 0) {
+        this.videos = this.videos.concat(page.items);
+        this.feedSourceCount = this.videos.length;
+        this.hasMore = this.videos.length < page.totalRecordCount;
+      } else {
+        this.hasMore = false;
+      }
+    } catch (error) {
+      // 局部刷新失败不影响删除主流程，保持本地同步结果
+    }
+  }
+
+  private async refreshMediaListTail(): Promise<void> {
+    // 媒体网格局部增量刷新：删除后补拉一页，避免网格出现空缺
+    const client = this.client;
+    if (client === null || this.mediaListLoading || !this.mediaListHasMore) {
+      return;
+    }
+    if (this.isFavoriteLibrary()) {
+      return;
+    }
+    try {
+      const query = new EmbyVideoQuery();
+      query.libraryId = this.selectedLibraryId;
+      query.hideCollections = this.hideCollections;
+      const page: EmbyVideoPage = await client.getVideos(this.mediaListItems.length, this.pageSize, query);
+      this.mediaListTotal = page.totalRecordCount;
+      if (page.items.length > 0) {
+        this.mediaListItems = this.mediaListItems.concat(page.items);
+        this.mediaListHasMore = this.mediaListItems.length < page.totalRecordCount;
+      } else {
+        this.mediaListHasMore = false;
+      }
+    } catch (error) {
+      return;
+    }
   }
 
   private removeFavoriteRecord(id: string): void {
@@ -1345,7 +1406,10 @@ struct Index {
       this.selectedIds = [];
       if (this.mediaListItems.length === 0 && this.mediaListHasMore) {
         this.loadMediaListPage();
+      } else {
+        this.refreshMediaListTail();
       }
+      this.refreshFeedTail();
     }
     this.multiSelectMode = false;
     this.batchDeletePending = false;
@@ -1380,7 +1444,7 @@ struct Index {
       }
       const target = this.currentIndex - removedBefore;
       this.currentIndex = Math.max(0, Math.min(target, this.videos.length - 1));
-      this.swiperController.changeIndex(this.currentIndex, false);
+      this.syncSwiperIndex();
     } else {
       this.currentIndex = Math.max(0, this.currentIndex - removedBefore);
     }
@@ -2218,7 +2282,7 @@ struct Index {
         .indicator(false)
         .cachedCount(1)
         .duration(260)
-        .enabled(!this.deletePending && this.deleteAfterAnimId.length === 0)
+        .enabled(!this.deletePending)
         .onChange((index: number) => {
           this.currentIndex = index;
           if (this.hasMore && index >= this.videos.length - 3) {
@@ -2415,7 +2479,7 @@ struct Index {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Image(item.imageUrl)
           .width('100%')
-          .aspectRatio(16 / 9)
+          .aspectRatio(9 / 16)
           .objectFit(ImageFit.Cover)
           .borderRadius(8)
           .alt($r('app.media.startIcon'))
@@ -2468,10 +2532,11 @@ struct Index {
           .borderRadius(12)
           .backgroundColor('#5B74F6')
           .margin({ top: 6, right: 6 })
+          .align(Alignment.TopEnd)
         }
       }
       .width('100%')
-      .aspectRatio(16 / 9)
+      .aspectRatio(9 / 16)
       .border(this.isCurrentPlaying(item) ? { width: 2, color: '#5B74F6' } : { width: 0 })
 
       Text(item.name)
@@ -2575,7 +2640,7 @@ struct Index {
             }
           }, (item: EmbyVideo) => item.id)
         }
-        .columnsTemplate('1fr 1fr 1fr')
+        .columnsTemplate('1fr 1fr')
         .columnsGap(8)
         .rowsGap(14)
         .width('100%')

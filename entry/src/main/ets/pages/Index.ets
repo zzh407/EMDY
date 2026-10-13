@@ -38,6 +38,8 @@ struct Index {
   @State immersive: boolean = true;
   @State controlsHidden: boolean = false;
   @State hintText: string = '';
+  @State windowWidth: number = 0;
+  @State windowHeight: number = 0;
   @State mediaListVisible: boolean = false;
   @State mediaListItems: Array<EmbyVideo> = [];
   @State mediaListLoading: boolean = false;
@@ -104,6 +106,15 @@ struct Index {
           this.topSafePadding = areaHeightVp;
         }
       });
+      // 折叠屏展开/折叠时窗口尺寸变化，同步刷新宽屏布局
+      const rect = mainWindow.getWindowProperties().windowRect;
+      this.windowWidth = uiContext.px2vp(rect.width);
+      this.windowHeight = uiContext.px2vp(rect.height);
+      mainWindow.off('windowSizeChange');
+      mainWindow.on('windowSizeChange', (size: window.Size) => {
+        this.windowWidth = uiContext.px2vp(size.width);
+        this.windowHeight = uiContext.px2vp(size.height);
+      });
     } catch (error) {
       this.topSafePadding = 0;
       this.bottomSafePadding = 0;
@@ -113,6 +124,15 @@ struct Index {
   private toggleImmersive(): void {
     this.immersive = !this.immersive;
     this.applyImmersiveMode();
+  }
+
+  private isWideLayout(): boolean {
+    // 折叠屏展开态/平板：宽度达到 600vp 时启用宽屏布局
+    return this.windowWidth >= 600;
+  }
+
+  private feedMaxWidth(): number {
+    return this.isWideLayout() ? 460 : 0;
   }
 
   private topInset(): number {
@@ -1342,6 +1362,7 @@ struct Index {
       }
       .width('100%')
       .constraintSize({ maxWidth: 520 })
+      .alignSelf(ItemAlign.Center)
       .padding({ left: 28, right: 28, top: this.topInset() + 40, bottom: this.bottomInset() })
     }
     .width('100%')
@@ -1446,8 +1467,9 @@ struct Index {
             this.loadVideos(false);
           }
         })
-        .width('100%')
+        .width(this.isWideLayout() ? this.feedMaxWidth() : '100%')
         .height('100%')
+        .alignSelf(this.isWideLayout() ? ItemAlign.Center : ItemAlign.Start)
       } else if (this.isLoading) {
         Column({ space: 16 }) {
           LoadingProgress()
@@ -1797,7 +1819,7 @@ struct Index {
             }
           }, (item: EmbyVideo) => item.id)
         }
-        .columnsTemplate('1fr 1fr')
+        .columnsTemplate(this.isWideLayout() ? '1fr 1fr 1fr 1fr' : '1fr 1fr')
         .columnsGap(8)
         .rowsGap(14)
         .width('100%')
@@ -1933,7 +1955,7 @@ struct Index {
       .padding(24)
       .backgroundColor('#1E2230')
       .borderRadius(20)
-      .width('84%')
+      .constraintSize({ maxWidth: 480 })
     }
     .width('100%')
     .height('100%')

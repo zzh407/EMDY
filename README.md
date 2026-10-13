@@ -2,7 +2,7 @@
 
 EMDY 是一个运行在 HarmonyOS 上的 Emby 短视频客户端，用竖屏滑动的方式浏览和播放 Emby 媒体库中的视频，像刷短视频一样看自己的影音库。
 
-当前版本：v1.3.1（[下载](https://github.com/zzh407/EMDY/releases/latest)）
+当前版本：v1.3.2（[下载](https://github.com/zzh407/EMDY/releases/latest)）
 
 ## 功能
 

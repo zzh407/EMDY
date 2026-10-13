@@ -1220,7 +1220,6 @@ struct Index {
         this.syncSwiperIndex();
       }
       this.showHint('已删除');
-      this.refreshFeedTail();
     } catch (error) {
       this.showHint(`删除失败：${this.describeError(error as Error)}`);
     } finally {
@@ -1267,7 +1266,6 @@ struct Index {
       }
       this.syncSwiperIndex();
       this.showHint('已删除');
-      this.refreshFeedTail();
     } finally {
       this.deletePending = false;
     }
@@ -1280,73 +1278,6 @@ struct Index {
       return;
     }
     await this.loadVideos(true);
-  }
-
-  private async refreshFeedTail(): Promise<void> {
-    // 删除后局部增量刷新：从服务端补拉一页到列表尾部，并用权威总数修正计数。
-    // 排序为 DateCreated 倒序（稳定），删除后本地 length 与服务端偏移天然对齐。
-    const client = this.client;
-    if (client === null || this.isLoading || !this.hasMore || this.videos.length === 0) {
-      return;
-    }
-    if (this.isFavoriteLibrary() || this.isAuthorFiltered() || this.shufflePlayback) {
-      return;
-    }
-    // 必须占用 isLoading 锁：否则会与 onChange 触发的预加载并发 concat，产生重复 ID 导致 ForEach 崩溃
-    this.isLoading = true;
-    try {
-      const query = new EmbyVideoQuery();
-      query.libraryId = this.selectedLibraryId;
-      query.hideCollections = this.hideCollections;
-      const page: EmbyVideoPage = await client.getVideos(this.videos.length, this.pageSize, query);
-      this.totalRecordCount = page.totalRecordCount;
-      if (page.items.length > 0) {
-        const existing = new Set(this.videos.map((video: EmbyVideo) => video.id));
-        const fresh = page.items.filter((video: EmbyVideo) => !existing.has(video.id));
-        this.videos = this.videos.concat(fresh);
-        this.feedSourceCount = this.videos.length;
-        this.hasMore = this.videos.length < page.totalRecordCount;
-      } else {
-        this.hasMore = false;
-      }
-    } catch (error) {
-      // 局部刷新失败不影响删除主流程，保持本地同步结果
-    } finally {
-      this.isLoading = false;
-      await this.flushReloadAfterDelete();
-    }
-  }
-
-  private async refreshMediaListTail(): Promise<void> {
-    // 媒体网格局部增量刷新：删除后补拉一页，避免网格出现空缺
-    const client = this.client;
-    if (client === null || this.mediaListLoading || !this.mediaListHasMore) {
-      return;
-    }
-    if (this.isFavoriteLibrary()) {
-      return;
-    }
-    // 与 loadMediaListPage 互斥，避免并发 concat 产生重复 key
-    this.mediaListLoading = true;
-    try {
-      const query = new EmbyVideoQuery();
-      query.libraryId = this.selectedLibraryId;
-      query.hideCollections = this.hideCollections;
-      const page: EmbyVideoPage = await client.getVideos(this.mediaListItems.length, this.pageSize, query);
-      this.mediaListTotal = page.totalRecordCount;
-      if (page.items.length > 0) {
-        const existing = new Set(this.mediaListItems.map((item: EmbyVideo) => item.id));
-        const fresh = page.items.filter((item: EmbyVideo) => !existing.has(item.id));
-        this.mediaListItems = this.mediaListItems.concat(fresh);
-        this.mediaListHasMore = this.mediaListItems.length < page.totalRecordCount;
-      } else {
-        this.mediaListHasMore = false;
-      }
-    } catch (error) {
-      return;
-    } finally {
-      this.mediaListLoading = false;
-    }
   }
 
   private removeFavoriteRecord(id: string): void {
@@ -1447,10 +1378,7 @@ struct Index {
       this.selectedIds = [];
       if (this.mediaListItems.length === 0 && this.mediaListHasMore) {
         this.loadMediaListPage();
-      } else {
-        this.refreshMediaListTail();
       }
-      this.refreshFeedTail();
     }
     this.multiSelectMode = false;
     this.batchDeletePending = false;
@@ -1624,6 +1552,14 @@ struct Index {
         .margin({ top: 4 })
 
         Row({ space: 10 }) {
+          Button('刷新媒体库')
+            .layoutWeight(1)
+            .height(44)
+            .fontSize(13)
+            .fontColor(Color.White)
+            .backgroundColor('#2B2E39')
+            .borderRadius(14)
+            .onClick(() => this.refreshMediaLibrary())
           Button('更换服务器')
             .layoutWeight(1)
             .height(44)
@@ -2060,6 +1996,33 @@ struct Index {
     this.hideCollections = !this.hideCollections;
     AppSettings.saveHideCollections(this.getAbilityContext(), this.hideCollections);
     this.loadVideos(true);
+  }
+
+  private async refreshMediaLibrary(): Promise<void> {
+    if (this.isLoading || this.mediaListLoading) {
+      this.showHint('正在加载中，请稍候');
+      return;
+    }
+    if (this.client === null) {
+      this.showHint('尚未连接服务器');
+      return;
+    }
+    this.optionsVisible = false;
+    this.multiSelectMode = false;
+    this.selectedIds = [];
+    this.showHint('正在刷新媒体库…');
+    this.loadLibraries();
+    await this.loadVideos(true);
+    if (this.mediaListVisible) {
+      this.mediaListItems = [];
+      this.mediaListTotal = 0;
+      this.mediaListHasMore = true;
+      this.mediaListLoading = false;
+      await this.loadMediaListPage();
+    }
+    if (this.errorMessage.length === 0) {
+      this.showHint('媒体库已刷新');
+    }
   }
 
   private describeError(error: Error): string {

@@ -1552,7 +1552,7 @@ struct Index {
         .margin({ top: 4 })
 
         Row({ space: 10 }) {
-          Button('刷新媒体库')
+          Button('扫描媒体库')
             .layoutWeight(1)
             .height(44)
             .fontSize(13)
@@ -2003,26 +2003,35 @@ struct Index {
       this.showHint('正在加载中，请稍候');
       return;
     }
-    if (this.client === null) {
+    const client = this.client;
+    if (client === null) {
       this.showHint('尚未连接服务器');
       return;
     }
+    if (this.isFavoriteLibrary()) {
+      this.showHint('「喜欢」是本地收藏，无需扫描');
+      return;
+    }
     this.optionsVisible = false;
-    this.multiSelectMode = false;
-    this.selectedIds = [];
-    this.showHint('正在刷新媒体库…');
-    this.loadLibraries();
-    await this.loadVideos(true);
-    if (this.mediaListVisible) {
-      this.mediaListItems = [];
-      this.mediaListTotal = 0;
-      this.mediaListHasMore = true;
-      this.mediaListLoading = false;
-      await this.loadMediaListPage();
+    this.showHint('正在通知服务器扫描媒体库…');
+    try {
+      if (this.selectedLibraryId.length > 0) {
+        await client.refreshItem(this.selectedLibraryId);
+      } else {
+        // 未指定媒体库（全部媒体/作者筛选）：逐个扫描服务器上的真实媒体库
+        for (const library of this.libraries) {
+          if (library.id === 'favorites') {
+            continue;
+          }
+          await client.refreshItem(library.id);
+        }
+      }
+    } catch (error) {
+      this.showHint(`扫描失败：${this.describeError(error as Error)}`);
+      return;
     }
-    if (this.errorMessage.length === 0) {
-      this.showHint('媒体库已刷新');
-    }
+    // Emby 扫描为服务端后台任务，耗时取决于库大小，交由服务器自行完成
+    this.showHint('媒体库扫描已开始，新内容稍后自动可见');
   }
 
   private describeError(error: Error): string {

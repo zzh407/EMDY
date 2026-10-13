@@ -199,6 +199,19 @@ export class EmbyClient {
     return new EmbyVideoPage([], 0);
   }
 
+  async refreshItem(itemId: string): Promise<void> {
+    if (itemId.length === 0) {
+      throw new Error('媒体库 ID 为空，无法扫描');
+    }
+    if (this.accessToken.length === 0) {
+      throw new Error('登录状态已失效，请重新登录');
+    }
+    // 递归刷新媒体库：重新扫描文件、元数据与图片
+    const path = `/Items/${encodeURIComponent(itemId)}/Refresh?Recursive=true` +
+      '&MetadataRefreshMode=FullRefresh&ImageRefreshMode=FullRefresh';
+    await this.request(path, http.RequestMethod.POST, '', true);
+  }
+
   async deleteItem(itemId: string): Promise<void> {
     if (itemId.length === 0) {
       throw new Error('视频 ID 为空，无法删除');
@@ -210,7 +223,8 @@ export class EmbyClient {
     await this.request(path, http.RequestMethod.DELETE, '', true);
   }
 
-  async getViewsSummary(): Promise<EmbyViewsSummary> {    if (this.accessToken.length === 0 || this.userId.length === 0) {
+  async getViewsSummary(): Promise<EmbyViewsSummary> {
+    if (this.accessToken.length === 0 || this.userId.length === 0) {
       return { total: 0, text: '登录状态已失效' };
     }
     return this.describeLibraries();

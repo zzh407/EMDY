@@ -17,6 +17,8 @@ export class EmbyVideoQuery {
   libraryId: string = '';
   hideCollections: boolean = false;
   random: boolean = false;
+  tags: string = '';
+  genres: string = '';
 }
 
 interface EmbyUserDto {
@@ -66,6 +68,8 @@ interface EmbyItemDto {
   Container?: string;
   People?: Array<EmbyPersonDto>;
   Studios?: Array<EmbyStudioDto>;
+  Tags?: Array<string>;
+  Genres?: Array<string>;
   MediaSources?: Array<EmbyMediaSourceDto>;
   MediaStreams?: Array<EmbyMediaStreamDto>;
 }
@@ -159,8 +163,10 @@ export class EmbyClient {
     }
 
     const parentFilter = query.libraryId.length > 0 ? `&ParentId=${encodeURIComponent(query.libraryId)}` : '';
-    const baseQuery = `StartIndex=${startIndex}&Limit=${limit}&Recursive=true${parentFilter}` +
-      '&Fields=Overview,MediaStreams,Container,MediaSources,People,Studios,PremiereDate,ProductionYear' +
+    const tagsFilter = query.tags.length > 0 ? `&Tags=${encodeURIComponent(query.tags)}` : '';
+    const genresFilter = query.genres.length > 0 ? `&Genres=${encodeURIComponent(query.genres)}` : '';
+    const baseQuery = `StartIndex=${startIndex}&Limit=${limit}&Recursive=true${parentFilter}${tagsFilter}${genresFilter}` +
+      '&Fields=Overview,MediaStreams,Container,MediaSources,People,Studios,Tags,Genres,PremiereDate,ProductionYear' +
       '&EnableImages=true&ImageTypeLimit=1';
     const sortClause = query.random ? 'SortBy=Random' : 'SortBy=DateCreated&SortOrder=Descending';
     const queryVariants: Array<string> = [
@@ -364,7 +370,30 @@ export class EmbyClient {
     return new EmbyVideo(id, name, overview, this.buildImageUrl(imageItemId), this.buildUrl(id, firstMode),
       this.formatDuration(item.RuntimeTicks ? item.RuntimeTicks : 0), this.buildAuthorName(item),
       this.buildAuthorAvatar(item), width, height, playbackModes, this.buildUrl(id, 'direct'),
-      this.buildUrl(id, 'hls'), this.buildUrl(id, 'original'), originalIndex);
+      this.buildUrl(id, 'hls'), this.buildUrl(id, 'original'), originalIndex,
+      this.readTags(item), this.readGenres(item));
+  }
+
+  private readTags(item: EmbyItemDto): Array<string> {
+    const source: Array<string> = item.Tags ? item.Tags : [];
+    const tags: Array<string> = [];
+    source.forEach((tag: string) => {
+      if (tag && tag.trim().length > 0) {
+        tags.push(tag.trim());
+      }
+    });
+    return tags;
+  }
+
+  private readGenres(item: EmbyItemDto): Array<string> {
+    const source: Array<string> = item.Genres ? item.Genres : [];
+    const genres: Array<string> = [];
+    source.forEach((genre: string) => {
+      if (genre && genre.trim().length > 0) {
+        genres.push(genre.trim());
+      }
+    });
+    return genres;
   }
 
   private buildPlaybackModes(item: EmbyItemDto): Array<EmbyPlaybackMode> {

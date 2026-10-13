@@ -21,6 +21,8 @@ interface PlainVideo {
   hlsStreamUrl?: string;
   originalStreamUrl?: string;
   originalIndex?: number;
+  tags?: Array<string>;
+  genres?: Array<string>;
 }
 
 export class FavoriteStore {
@@ -53,7 +55,9 @@ export class FavoriteStore {
           plain.directStreamUrl ? plain.directStreamUrl : '',
           plain.hlsStreamUrl ? plain.hlsStreamUrl : '',
           plain.originalStreamUrl ? plain.originalStreamUrl : '',
-          plain.originalIndex ? plain.originalIndex : 0
+          plain.originalIndex ? plain.originalIndex : 0,
+          plain.tags ? plain.tags : [],
+          plain.genres ? plain.genres : []
         ));
       });
       return videos;
@@ -81,7 +85,9 @@ export class FavoriteStore {
           directStreamUrl: video.directStreamUrl,
           hlsStreamUrl: video.hlsStreamUrl,
           originalStreamUrl: video.originalStreamUrl,
-          originalIndex: video.originalIndex
+          originalIndex: video.originalIndex,
+          tags: video.tags,
+          genres: video.genres
         };
         return plain;
       });

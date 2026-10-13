@@ -1175,6 +1175,7 @@ struct Index {
     }
     this.deletePending = true;
     this.showHint('正在删除…');
+    let keepPending = false;
     try {
       await client.deleteItem(item.id);
       this.removeFavoriteRecord(item.id);
@@ -1188,15 +1189,21 @@ struct Index {
       }
       if (this.videos.length <= 1) {
         this.videos.splice(deletedIndex, 1);
+        if (this.feedSourceCount > 0) {
+          this.feedSourceCount--;
+        }
         this.currentIndex = 0;
         this.showHint('已删除，正在重新加载列表');
         await this.reloadAfterEmpty();
         return;
       }
       if (deletedIndex === this.currentIndex) {
-        // 与连播跳转保持一致的滑动动画：先滑走，动画结束后再移除数据
+        // 与连播跳转保持一致的滑动动画：先滑走，动画结束后再移除数据。
+        // keepPending：动画期间保持锁定，由 applyPendingDelete 收尾释放，
+        // 避免用户在 300ms 窗口内滑动造成索引交叉。
         const target = deletedIndex < this.videos.length - 1 ? deletedIndex + 1 : deletedIndex - 1;
         this.deleteAfterAnimId = item.id;
+        keepPending = true;
         this.swiperController.changeIndex(target, true);
         this.deleteAnimTimer = setTimeout(() => {
           this.deleteAnimTimer = 0;
@@ -1205,6 +1212,9 @@ struct Index {
         return;
       }
       this.videos.splice(deletedIndex, 1);
+      if (this.feedSourceCount > 0) {
+        this.feedSourceCount--;
+      }
       if (this.currentIndex > deletedIndex) {
         this.currentIndex--;
         this.syncSwiperIndex();
@@ -1214,13 +1224,19 @@ struct Index {
     } catch (error) {
       this.showHint(`删除失败：${this.describeError(error as Error)}`);
     } finally {
-      this.deletePending = false;
+      if (!keepPending) {
+        this.deletePending = false;
+      }
     }
   }
 
   private syncSwiperIndex(): void {
     // 数据变化先让 ForEach 落地，下一帧再同步 Swiper，避免同帧竞争导致相邻卡片重排卡顿
     setTimeout(() => {
+      if (this.currentIndex < 0 || this.currentIndex >= this.videos.length) {
+        // 数据已变化导致索引无效，交由 .index 绑定处理，避免越界 changeIndex
+        return;
+      }
       this.swiperController.changeIndex(this.currentIndex, false);
     }, 32);
   }
@@ -1229,20 +1245,32 @@ struct Index {
     const id = this.deleteAfterAnimId;
     this.deleteAfterAnimId = '';
     if (id.length === 0) {
+      this.deletePending = false;
       return;
     }
     const index = this.videos.findIndex((video: EmbyVideo) => video.id === id);
     if (index < 0) {
+      this.deletePending = false;
       return;
     }
-    this.videos.splice(index, 1);
-    if (this.currentIndex > index) {
-      // 动画滑到了下一项：删除后该项前移到 index，修正索引保持画面内容不变
-      this.currentIndex--;
+    try {
+      this.videos.splice(index, 1);
+      if (this.feedSourceCount > 0) {
+        this.feedSourceCount--;
+      }
+      if (this.currentIndex > index) {
+        // 动画滑到了下一项：删除后该项前移到 index，修正索引保持画面内容不变
+        this.currentIndex--;
+      }
+      if (this.currentIndex >= this.videos.length) {
+        this.currentIndex = Math.max(0, this.videos.length - 1);
+      }
+      this.syncSwiperIndex();
+      this.showHint('已删除');
+      this.refreshFeedTail();
+    } finally {
+      this.deletePending = false;
     }
-    this.syncSwiperIndex();
-    this.showHint('已删除');
-    this.refreshFeedTail();
   }
 
   private async reloadAfterEmpty(): Promise<void> {
@@ -1264,6 +1292,8 @@ struct Index {
     if (this.isFavoriteLibrary() || this.isAuthorFiltered() || this.shufflePlayback) {
       return;
     }
+    // 必须占用 isLoading 锁：否则会与 onChange 触发的预加载并发 concat，产生重复 ID 导致 ForEach 崩溃
+    this.isLoading = true;
     try {
       const query = new EmbyVideoQuery();
       query.libraryId = this.selectedLibraryId;
@@ -1271,7 +1301,9 @@ struct Index {
       const page: EmbyVideoPage = await client.getVideos(this.videos.length, this.pageSize, query);
       this.totalRecordCount = page.totalRecordCount;
       if (page.items.length > 0) {
-        this.videos = this.videos.concat(page.items);
+        const existing = new Set(this.videos.map((video: EmbyVideo) => video.id));
+        const fresh = page.items.filter((video: EmbyVideo) => !existing.has(video.id));
+        this.videos = this.videos.concat(fresh);
         this.feedSourceCount = this.videos.length;
         this.hasMore = this.videos.length < page.totalRecordCount;
       } else {
@@ -1279,6 +1311,9 @@ struct Index {
       }
     } catch (error) {
       // 局部刷新失败不影响删除主流程，保持本地同步结果
+    } finally {
+      this.isLoading = false;
+      await this.flushReloadAfterDelete();
     }
   }
 
@@ -1291,6 +1326,8 @@ struct Index {
     if (this.isFavoriteLibrary()) {
       return;
     }
+    // 与 loadMediaListPage 互斥，避免并发 concat 产生重复 key
+    this.mediaListLoading = true;
     try {
       const query = new EmbyVideoQuery();
       query.libraryId = this.selectedLibraryId;
@@ -1298,13 +1335,17 @@ struct Index {
       const page: EmbyVideoPage = await client.getVideos(this.mediaListItems.length, this.pageSize, query);
       this.mediaListTotal = page.totalRecordCount;
       if (page.items.length > 0) {
-        this.mediaListItems = this.mediaListItems.concat(page.items);
+        const existing = new Set(this.mediaListItems.map((item: EmbyVideo) => item.id));
+        const fresh = page.items.filter((item: EmbyVideo) => !existing.has(item.id));
+        this.mediaListItems = this.mediaListItems.concat(fresh);
         this.mediaListHasMore = this.mediaListItems.length < page.totalRecordCount;
       } else {
         this.mediaListHasMore = false;
       }
     } catch (error) {
       return;
+    } finally {
+      this.mediaListLoading = false;
     }
   }
 
@@ -1433,6 +1474,7 @@ struct Index {
       }
     }
     this.videos = this.videos.filter((item: EmbyVideo) => !deletedSet.has(item.id));
+    this.feedSourceCount = this.videos.length;
     if (currentId.length === 0) {
       return;
     }
@@ -1808,14 +1850,17 @@ struct Index {
         query.hideCollections = this.hideCollections;
         const startIndex = reset ? 0 : this.feedSourceCount;
         const page: EmbyVideoPage = await client.getVideos(startIndex, this.pageSize, query);
+        // 去重拼接：防止与局部刷新等路径交叠时产生重复 ID（ForEach key 重复会致渲染崩溃）
+        const existing = new Set(this.videos.map((video: EmbyVideo) => video.id));
+        const fresh = reset ? page.items : page.items.filter((video: EmbyVideo) => !existing.has(video.id));
         if (reset) {
           this.videos = page.items;
         } else {
-          this.videos = this.videos.concat(page.items);
+          this.videos = this.videos.concat(fresh);
         }
-        this.feedSourceCount = this.feedSourceCount + page.items.length;
+        this.feedSourceCount = this.feedSourceCount + fresh.length;
         this.totalRecordCount = page.totalRecordCount;
-        this.hasMore = this.videos.length < page.totalRecordCount && page.items.length > 0;
+        this.hasMore = this.videos.length < page.totalRecordCount && fresh.length > 0;
       }
       if (this.videos.length === 0) {
         const views: EmbyViewsSummary = await client.getViewsSummary();
@@ -1955,9 +2000,11 @@ struct Index {
       query.hideCollections = this.hideCollections;
       const startIndex = this.mediaListItems.length;
       const page: EmbyVideoPage = await client.getVideos(startIndex, this.pageSize, query);
-      this.mediaListItems = this.mediaListItems.concat(page.items);
+      const existing = new Set(this.mediaListItems.map((item: EmbyVideo) => item.id));
+      const fresh = page.items.filter((item: EmbyVideo) => !existing.has(item.id));
+      this.mediaListItems = this.mediaListItems.concat(fresh);
       this.mediaListTotal = page.totalRecordCount;
-      this.mediaListHasMore = this.mediaListItems.length < page.totalRecordCount && page.items.length > 0;
+      this.mediaListHasMore = this.mediaListItems.length < page.totalRecordCount && fresh.length > 0;
     } catch (error) {
       this.errorMessage = this.describeError(error as Error);
     } finally {

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 故障风音符：青/品红重影 + 白色主体 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 青色重影（左上偏移） -->
+    <group android:translateX="-2.2" android:translateY="-1.6">
+        <path
+            android:strokeColor="#25F4EE"
+            android:strokeWidth="4.6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M58,66 L58,26 C66,24 74,30 76,38 C78,47 74,54 66,55" />
+        <path
+            android:fillColor="#25F4EE"
+            android:pathData="M43,72 m-11,0 a11,9 0 1,0 22,0 a11,9 0 1,0 -22,0" />
+    </group>
+
+    <!-- 品红重影（右下偏移） -->
+    <group android:translateX="2.2" android:translateY="1.6">
+        <path
+            android:strokeColor="#FE2C55"
+            android:strokeWidth="4.6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M58,66 L58,26 C66,24 74,30 76,38 C78,47 74,54 66,55" />
+        <path
+            android:fillColor="#FE2C55"
+            android:pathData="M43,72 m-11,0 a11,9 0 1,0 22,0 a11,9 0 1,0 -22,0" />
+    </group>
+
+    <!-- 白色主体 -->
+    <path
+        android:strokeColor="#F5F8FF"
+        android:strokeWidth="4.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M58,66 L58,26 C66,24 74,30 76,38 C78,47 74,54 66,55" />
+    <path
+        android:fillColor="#F5F8FF"
+        android:pathData="M43,72 m-11,0 a11,9 0 1,0 22,0 a11,9 0 1,0 -22,0" />
+</vector>

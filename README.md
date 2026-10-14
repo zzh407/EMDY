@@ -59,6 +59,24 @@ EMDY 是一个运行在 HarmonyOS 上的 Emby 短视频客户端，用竖屏滑�
 - `@kit.ArkUI` 的 `Video` 组件播放视频，`PanGesture` / `LongPressGesture` 实现进度拖动与倍速
 - 构建工具：Hvigor
 
+## Android 端
+
+`android/` 目录为功能对齐的 Android 版本，技术栈：
+
+- Kotlin + Jetpack Compose（Material3）
+- Media3 ExoPlayer 播放（直连 / HLS 自适应）
+- OkHttp + kotlinx.serialization 访问 Emby API
+- DataStore 持久化登录、收藏与设置
+- Coil 加载图片
+
+功能与 HarmonyOS 版一致：竖屏信息流、拖动进度、长按倍速、收藏、作者/标签筛选、单条与批量删除、媒体库扫描、折叠屏与平板宽屏适配。
+
+```bash
+# 用 Android Studio 打开 android/ 目录，或命令行构建
+cd android
+./gradlew assembleDebug
+```
+
 ## 目录结构
 
 ```

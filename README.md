@@ -1,111 +1,181 @@
 # EMDY
 
-EMDY 是一个运行在 HarmonyOS 上的 Emby 短视频客户端，用竖屏滑动的方式浏览和播放 Emby 媒体库中的视频，像刷短视频一样看自己的影音库。
+<div align="center">
 
-当前版本：v1.4.0（[下载](https://github.com/zzh407/EMDY/releases/latest)）
+**Emby 短视频客户端** — 像刷短视频一样看自己的影音库
 
-## 功能
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-API%2012-blue.svg)](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V5/application-dev-guide-V5)
+[![Android](https://img.shields.io/badge/Android-API%2034-green.svg)](https://developer.android.com/about/versions/14)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](#)
 
-### 播放与浏览
+[下载最新版本](https://github.com/zzh407/EMDY/releases/latest) · [问题反馈](https://github.com/zzh407/EMDY/issues) · [功能建议](https://github.com/zzh407/EMDY/issues/new?labels=enhancement)
 
-- **Emby 账号登录**：填写服务器地址、用户名和密码即可登录，可选择记住登录信息
-- **竖屏短视频浏览**：上下滑动切换视频，滑动时自动预加载后续内容
-- **自动连播**：单个视频播放结束后自动进入下一条，播放到末尾会提示；随机模式播完自动重新洗牌
-- **播放模式**：顺序播放 / 随机播放一键切换
-- **长按倍速**：按住画面快进观看，松开恢复原速，屏幕中央显示倍速提示；倍速档位（1.25x ~ 3x）可在设置中选择
-- **左右滑动拖进度**：满屏宽度对应整个视频时长；拖动时暂停播放、按关键帧实时预览，松手精确跳转并恢复播放；拖到末尾会停在最后 1 秒内，不会误触跳转下一条
-- **沉浸式播放**：默认隐藏系统栏全屏播放，可一键切换；隐藏控件后只保留右下角眼睛图标，点击恢复
-- **冷启动静音**：每次打开应用默认静音播放，切后台再回来保持当前选择
-- **视频信息展示**：底部显示作者头像、作者名、标题、时长与简介
+</div>
 
-### 收藏
+---
 
-- **喜欢按钮**：播放页右侧心形按钮一键收藏，点击后爱心变红并弹出提示
-- **本地持久化**：收藏保存在本机（含视频播放信息），断网也能回看已收藏内容
-- **喜欢媒体库**：媒体库列表首位固定「喜欢」虚拟库，集中浏览全部收藏，取消收藏实时刷新列表
-- **收藏角标**：媒体网格中已收藏的视频显示红色心形角标
+## 简介
 
-### 视频管理
+EMDY 是一个运行在 HarmonyOS 和 Android 平台上的 Emby 短视频客户端，用竖屏滑动的方式浏览和播放 Emby 媒体库中的视频，带来类似主流短视频平台的流畅体验。
 
-- **单条删除**：播放页右侧红色垃圾桶按钮，二次确认后从 Emby 服务器永久删除，删除时播放与连播一致的滑动动画并跳到下一条
-- **批量删除**：「全部视频」网格页长按任意视频进入多选模式，顶部支持全选、取消全选、批量删除，串行执行并实时同步播放列表与收藏，部分失败有明确提示
-- **作者筛选**：点击视频作者头像或 `@作者名`，自动跳转全部媒体库并筛选该作者的所有视频；筛选结果独立编号、独立连播，右上角「全部视频」一键恢复原媒体库与播放模式
-- **标签筛选**：自动读取视频的 Genres（nfo `<genre>` 字段）与 Tags，合并展示在简介下方；点击标签即可筛选当前媒体库中带有该标签的全部视频，右上角「全部视频」恢复
+**当前版本**：v1.4.1
 
-### 媒体库与界面
+## 功能特性
 
-- **媒体库切换**：登录后拉取服务器上的媒体库列表，「喜欢」固定在第一位
-- **扫描媒体库**：设置中一键通知 Emby 服务器重新扫描媒体库（递归刷新文件、元数据与图片），扫描在服务端后台执行，新内容稍后自动可见
-- **全部视频网格**：竖版 9:16 大图预览、每行 2 个，适配短视频浏览；显示播放中标记与收藏角标；长按进入多选批量删除
-- **隐藏合集与文件夹**：可选择过滤合集、播放列表等聚合条目，只看单个视频
-- **播放设置**：随机播放、隐藏合集、记住登录信息、长按加速倍速档位
-- **右侧快捷按钮**：喜欢收藏、播放模式（`→` 顺序 / `⇄` 随机）、全屏、静音、隐藏控件
-- **操作提示**：点击功能按钮时屏幕中央弹出当前操作的提示
-- **播放模式兼容**：按容器格式自动选择直连或 HLS，播放失败可切换兼容模式重试
-- **折叠屏与平板适配**：监听窗口尺寸变化，折叠/展开、旋转、分屏时实时切换布局；宽度 ≥ 600vp 自动进入宽屏模式（信息流限宽居中不变形、网格每行 4 个、各弹窗限宽居中）
+### 核心功能
 
-### 安全防误删
+#### 播放与浏览
+- 🔐 **Emby 账号登录** — 支持服务器地址、用户名、密码登录，可选记住登录信息
+- 📱 **竖屏短视频流** — 上下滑动切换视频，自动预加载后续内容，流畅丝滑
+- 🔄 **自动连播** — 视频播放结束自动跳转下一条；随机模式播完自动重新洗牌
+- ⚡ **长按倍速** — 按住画面快进观看（1.25x ~ 3x 可选），松开恢复原速
+- ⏩ **左右拖动进度** — 全屏宽度对应视频时长，拖动时实时预览，松手精确跳转
+- 🎬 **沉浸式播放** — 默认全屏隐藏系统栏，可一键切换；隐藏控件后保留右下角眼睛图标
+- 🔇 **冷启动静音** — 每次打开默认静音，切后台再回来保持当前选择
+- 📊 **视频信息** — 底部展示作者头像、作者名、标题、时长、简介
 
-- 所有删除均需二次确认，弹窗展示将删除的视频标题
-- 删除请求与动画期间锁定滑动与拖动操作，避免索引交叉
-- 所有删除按视频 ID 精确匹配，不依赖列表位置，不会误删其他视频
+#### 收藏管理
+- ❤️ **一键收藏** — 播放页右侧心形按钮，点击后爱心变红并弹出提示
+- 💾 **本地持久化** — 收藏保存在本机，断网也能回看已收藏内容
+- 📚 **喜欢媒体库** — 媒体库列表首位固定「喜欢」虚拟库，集中浏览全部收藏
+- 🔖 **收藏角标** — 媒体网格中已收藏视频显示红色心形角标
+
+#### 视频管理
+- 🗑️ **单条删除** — 播放页右侧垃圾桶按钮，二次确认后永久删除，带滑动动画
+- 📦 **批量删除** — 网格页长按进入多选模式，支持全选、批量删除，串行执行
+- 👤 **作者筛选** — 点击作者头像或 `@作者名`，自动筛选该作者的全部视频
+- 🏷️ **标签筛选** — 点击 Genres 或 Tags 标签，筛选当前媒体库中带该标签的视频
+
+#### 媒体库与界面
+- 📋 **媒体库切换** — 登录后拉取服务器媒体库列表，「喜欢」固定在第一位
+- 🔄 **扫描媒体库** — 设置中通知 Emby 服务器重新扫描，后台执行
+- 🖼️ **全部视频网格** — 竖版 9:16 大图预览，每行 2 个，显示播放中标记与收藏角标
+- 🎭 **隐藏合集** — 可选过滤合集、播放列表等聚合条目，只看单个视频
+- ⚙️ **播放设置** — 随机播放、隐藏合集、记住登录、长按加速档位
+- 🎨 **折叠屏适配** — 宽度 ≥ 600vp 自动进入宽屏模式（信息流限宽、网格每行 4 个）
+
+### 安全与性能
+
+- 🔒 **二次确认** — 所有删除操作均需确认，弹窗展示将删除的视频标题
+- 🛡️ **防误删** — 删除期间锁定滑动操作，按视频 ID 精确匹配，不会误删其他视频
+- 🚀 **性能优化** — 协程管理、Pager 单向同步、非活跃页停止轮询、收藏写入序列化
 
 ## 技术栈
 
-- ArkTS / ArkUI（声明式开发）
-- HarmonyOS API，modelVersion 6.1.1(24)
-- `@kit.NetworkKit` 访问 Emby HTTP API（登录、媒体库、视频流、删除、媒体库扫描）
-- `@kit.ArkData` 的 `preferences` 保存登录、收藏与播放设置
-- `@kit.ArkUI` 的 `Video` 组件播放视频，`PanGesture` / `LongPressGesture` 实现进度拖动与倍速
-- 构建工具：Hvigor
+### HarmonyOS 端
 
-## Android 端
+| 技术 | 用途 |
+|------|------|
+| **ArkTS / ArkUI** | 声明式 UI 开发 |
+| **HarmonyOS API 12** | 系统接口 |
+| **@kit.NetworkKit** | Emby HTTP API（登录、媒体库、视频流、删除） |
+| **@kit.ArkData** | preferences 保存登录、收藏与设置 |
+| **@kit.ArkUI Video** | 视频播放，PanGesture/LongPressGesture 实现进度拖动与倍速 |
+| **Hvigor** | 构建工具 |
 
-`android/` 目录为功能对齐的 Android 版本，技术栈：
+### Android 端
 
-- Kotlin + Jetpack Compose（Material3）
-- Media3 ExoPlayer 播放（直连 / HLS 自适应）
-- OkHttp + kotlinx.serialization 访问 Emby API
-- DataStore 持久化登录、收藏与设置
-- Coil 加载图片
+| 技术 | 用途 |
+|------|------|
+| **Kotlin** | 开发语言 |
+| **Jetpack Compose (Material3)** | 声明式 UI |
+| **Media3 ExoPlayer** | 视频播放（直连 / HLS 自适应） |
+| **OkHttp** | Emby API 网络请求 |
+| **kotlinx.serialization** | JSON 序列化 |
+| **DataStore** | 持久化登录、收藏与设置 |
+| **Coil** | 图片加载 |
+| **Gradle 8.7** | 构建工具 |
 
-功能与 HarmonyOS 版一致：竖屏信息流、拖动进度、长按倍速、收藏、作者/标签筛选、单条与批量删除、媒体库扫描、折叠屏与平板宽屏适配。
-
-```bash
-# 用 Android Studio 打开 android/ 目录，或命令行构建
-cd android
-./gradlew assembleDebug
-```
-
-## 目录结构
+## 项目结构
 
 ```
 emdy/
-├── AppScope/
-│   └── resources/base/media/      应用图标（分层图标 background/foreground）
-├── entry/src/main/ets/
-│   ├── entryability/              应用入口
-│   ├── model/
-│   │   └── EmbyModels.ets         视频、媒体库、会话等数据模型
-│   ├── pages/
-│   │   └── Index.ets              登录页、短视频信息流、视频卡片与全部交互
-│   └── service/
-│       ├── AppSettings.ets        本地偏好设置读写
-│       ├── EmbyClient.ets         Emby 服务端接口封装
-│       ├── FavoriteStore.ets      本地喜欢收藏持久化
-│       └── SessionStore.ets       会话与设备 ID 持久化
+├── entry/                          # HarmonyOS 端
+│   └── src/main/ets/
+│       ├── entryability/           # 应用入口
+│       ├── model/
+│       │   └── EmbyModels.ets      # 数据模型
+│       ├── pages/
+│       │   ├── Index.ets           # 主页面（登录 + 信息流 + 全部交互）
+│       │   └── ShortVideoCard.ets  # 播放器卡片组件
+│       └── service/
+│           ├── AppSettings.ets     # 本地偏好设置
+│           ├── EmbyClient.ets      # Emby API 封装
+│           ├── FavoriteStore.ets   # 收藏持久化
+│           └── SessionStore.ets    # 会话持久化
+├── android/                        # Android 端
+│   └── app/src/main/java/com/zzhs/emdy/
+│       ├── data/
+│       │   ├── EmbyClient.kt       # Emby API 封装
+│       │   ├── EmbyModels.kt       # 数据模型
+│       │   ├── FavoriteStore.kt    # 收藏持久化
+│       │   └── SessionStore.kt     # 会话持久化
+│       └── ui/
+│           ├── EmdyState.kt        # 全局状态与业务逻辑
+│           ├── FeedScreen.kt       # 信息流页面
+│           ├── VideoCard.kt        # 播放器卡片
+│           ├── MediaListScreen.kt  # 媒体网格页面
+│           └── Dialogs.kt          # 对话框组件
 └── icon-design/
-    └── gen_icon.py                应用图标参数化生成脚本（Python + Pillow）
+    └── gen_icon.py                 # 应用图标生成脚本
 ```
 
-## 使用方式
+## 快速开始
+
+### HarmonyOS
+
+**前置要求**
+- DevEco Studio 5.0.3.403+
+- HarmonyOS SDK API 12
+
+**构建步骤**
+
+```bash
+# 安装依赖
+ohpm install
+
+# 构建 HAP
+hvigorw assembleHap --mode module -p product=default
+
+# 生成的 HAP 位于
+# entry/build/default/outputs/default/entry-default-signed.hap
+```
+
+或直接在 DevEco Studio 中打开工程，连接真机或模拟器后点击运行。
+
+### Android
+
+**前置要求**
+- JDK 17
+- Android SDK API 34
+- Gradle 8.7（已包含 wrapper）
+
+**构建步骤**
+
+```bash
+cd android
+
+# 构建 APK
+./gradlew assembleDebug
+
+# 生成的 APK 位于
+# android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+或在 Android Studio 中打开 `android/` 目录，连接设备后点击运行。
+
+## 使用指南
+
+### 首次使用
 
 1. 打开应用，输入 Emby 服务器地址（例如 `http://192.168.1.10:8096`）
 2. 输入用户名和密码，点击登录
-3. 登录成功后进入竖屏信息流：
+3. 登录成功后进入竖屏信息流
+
+### 交互操作
 
 | 操作 | 效果 |
-|---|---|
+|------|------|
 | 上下滑动 | 切换视频（自动预加载） |
 | 单击画面 | 暂停 / 继续播放 |
 | 左右滑动 | 拖动进度，实时预览，松手跳转 |
@@ -114,38 +184,89 @@ emdy/
 | 点击心形 | 收藏 / 取消收藏 |
 | 点击垃圾桶 | 删除当前视频（需确认，不可恢复） |
 
-4. 顶部操作：切换媒体库、打开「全部视频」网格（长按网格项多选后可批量删除）
-5. 右侧按钮：播放模式、全屏、静音、隐藏控件
-6. 设置面板：随机播放、隐藏合集与文件夹、记住登录、倍速档位、扫描媒体库、更换服务器
+### 其他功能
 
-## 编译运行
+- **顶部操作**：切换媒体库、打开「全部视频」网格（长按网格项可批量删除）
+- **右侧按钮**：播放模式（顺序/随机）、全屏、静音、隐藏控件
+- **设置面板**：随机播放、隐藏合集、记住登录、倍速档位、扫描媒体库、更换服务器
 
-需要 DevEco Studio 与 HarmonyOS SDK。
+## 更新日志
 
-```bash
-# 安装依赖
-ohpm install
+### v1.4.1 (2026-10-16)
 
-# 构建 HAP
-hvigorw --mode module -p product=default -p module=entry@default -p buildMode=debug assembleHap
-```
+**Bug Fixes**
+- 🐛 修复 HarmonyOS 定时器泄漏：`aboutToDisappear` 清理 `hintTimer`/`deleteAnimTimer`
+- 🐛 修复 HarmonyOS Swiper 复用播放器状态残留：`@Watch('onItemChanged')` 无条件重置播放器
+- 🐛 修复 Android `loadVideos` 竞态：reset 时无条件取消旧请求，避免旧响应覆盖新筛选
+- 🐛 修复 Android `finally` 块污染：仅当此 job 仍是当前 job 时才解除 `isLoading`
+- 🐛 修复 Android Pager 双向同步回弹：改为单向同步（仅 pager→state）
+- 🐛 优化 Android VideoCard 进度轮询：非活跃页不轮询，节省资源
+- 🐛 修复 Android 收藏并发写入：统一 `saveFavoritesAsync()` 序列化保存
+- 🐛 修复 Android 提示残留：`showHint` 使用 `tryFinally` 确保取消时清空
 
-也可以直接在 DevEco Studio 中打开工程，连接真机或模拟器后点击运行。
+**Code Quality**
+- ✨ `EmbyLibrary.ALL` 常量消除 3 处硬编码
+- ✨ `syncCurrentIndex` 空列表保护
+- ✨ `loadLibraries` 失败时提示用户而非静默
+- ✨ MediaListScreen 触底加载优化
 
-重新生成应用图标（可选）：
+### v1.4.0 (2026-10-15)
 
-```bash
-python icon-design/gen_icon.py
-```
+- Initial release with full features
 
-## 权限
+## 权限说明
 
-仅申请 `ohos.permission.INTERNET`，用于访问 Emby 服务器。
+### HarmonyOS
+- `ohos.permission.INTERNET` — 访问 Emby 服务器
 
-## 说明
+### Android
+- `android.permission.INTERNET` — 访问 Emby 服务器
+
+## 注意事项
 
 - 本项目仅用于访问自建的 Emby 媒体库，不会向第三方上传数据
 - 登录信息与喜欢收藏均保存在本机偏好设置中，可在设置中清除
 - 删除视频需要 Emby 账号具备删除媒体权限，权限不足时会明确提示
 - 扫描媒体库需要服务端执行实际扫描，耗时取决于库的大小
 - 视频能否直接播放取决于服务端文件编码，不支持时会自动提示切换兼容模式
+
+## 开发计划
+
+- [ ] 播放历史记录
+- [ ] 字幕支持
+- [ ] 音轨切换
+- [ ] 更多倍速选项（0.5x, 0.75x）
+- [ ] 播放统计与报表
+- [ ] 多服务器支持
+- [ ] PWA 版本
+
+## 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+## 许可证
+
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+
+## 致谢
+
+- [Emby](https://emby.media/) - 媒体服务器
+- [HarmonyOS](https://developer.huawei.com/consumer/cn/harmonyos/) - 华为鸿蒙系统
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) - Android 现代 UI 工具包
+- [Media3 ExoPlayer](https://developer.android.com/media/media3) - Android 媒体播放器
+
+---
+
+<div align="center">
+
+**如果这个项目对你有帮助，请给一个 ⭐️ Star！**
+
+Made with ❤️ by zzh407
+
+</div>

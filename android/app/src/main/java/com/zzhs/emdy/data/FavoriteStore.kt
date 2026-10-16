@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val Context.favoriteStore by preferencesDataStore(name = "emdy_settings")
+private val Context.favoriteStore by preferencesDataStore(name = "emdy_favorites")
 
 /** 本地喜欢收藏持久化（与 HarmonyOS 版字段对齐） */
 object FavoriteStore {

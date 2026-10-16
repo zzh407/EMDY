@@ -65,8 +65,7 @@ import com.zzhs.emdy.ui.theme.EmdyTagText
 import com.zzhs.emdy.ui.theme.EmdyTextMuted
 import com.zzhs.emdy.ui.theme.EmdyTextPrimary
 import com.zzhs.emdy.ui.theme.EmdyTextSecondary
-import kotlin.math.abs
-import kotlin.math.roundToInt
+
 
 /**
  * 视频卡片：ExoPlayer 播放、左右拖动进度（实时预览）、长按倍速、
@@ -122,10 +121,10 @@ fun VideoCard(state: EmdyState, item: EmbyVideo, active: Boolean) {    val confi
         }
     }
 
-    // 播放结束
-    LaunchedEffect(exoPlayer) {
-        val player = exoPlayer ?: return@LaunchedEffect
-        player.addListener(object : Player.Listener {
+    // 播放结束（DisposableEffect 确保 Listener 随 Player 释放而移除，防止泄漏）
+    DisposableEffect(exoPlayer) {
+        val player = exoPlayer ?: return@DisposableEffect onDispose {}
+        val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED && active && !isScrubbing) {
                     state.handlePlaybackEnd()
@@ -136,7 +135,9 @@ fun VideoCard(state: EmdyState, item: EmbyVideo, active: Boolean) {    val confi
             override fun onPlayerError(error: PlaybackException) {
                 hasError = true
             }
-        })
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
     }
 
     Box(
@@ -145,6 +146,15 @@ fun VideoCard(state: EmdyState, item: EmbyVideo, active: Boolean) {    val confi
             .background(Color.Black)
             .pointerInput(item.id) {
                 detectTapGestures(
+                    onPress = {
+                        exoPlayer?.let { player ->
+                            val released = tryAwaitRelease()
+                            if (released && isBoosting) {
+                                isBoosting = false
+                                player.setPlaybackSpeed(1f)
+                            }
+                        }
+                    },
                     onTap = {
                         val player = exoPlayer ?: return@detectTapGestures
                         if (player.isPlaying) {

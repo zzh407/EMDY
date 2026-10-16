@@ -59,7 +59,7 @@ fun FeedScreen(state: EmdyState) {
                 // Pager 与状态双向同步
                 LaunchedEffect(pagerState.currentPage) {
                     if (pagerState.currentPage != state.currentIndex) {
-                        state.currentIndex = pagerState.currentPage
+                        state.syncCurrentIndex(pagerState.currentPage)
                         if (state.hasMore && pagerState.currentPage >= state.videos.size - 3) {
                             state.loadVideos(false)
                         }

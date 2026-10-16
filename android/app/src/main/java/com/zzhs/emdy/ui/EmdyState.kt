@@ -42,6 +42,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
     var videos by mutableStateOf<List<EmbyVideo>>(emptyList())
         private set
     var currentIndex by mutableStateOf(0)
+        private set
     var isLoading by mutableStateOf(false)
         private set
     var errorMessage by mutableStateOf("")
@@ -122,6 +123,19 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
 
     fun isFiltered(): Boolean = filterAuthorName.isNotEmpty() || filterTagName.isNotEmpty()
 
+    fun feedCounter(): String {
+        if (videos.isEmpty()) return ""
+        if (filterAuthorName.isNotEmpty()) return "${currentIndex + 1}/${videos.size}"
+        return "${currentIndex + 1}/$totalRecordCount"
+    }
+
+    fun syncCurrentIndex(index: Int) {
+        val target = index.coerceIn(0, videos.size - 1)
+        if (target != currentIndex) {
+            currentIndex = target
+        }
+    }
+
     fun libraryButtonLabel(): String = when {
         filterTagName.isNotEmpty() -> {
             val tag = if (filterTagName.length > 5) filterTagName.substring(0, 5) + "…" else filterTagName
@@ -135,11 +149,6 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
             val name = if (selectedLibraryName.length > 6) selectedLibraryName.substring(0, 6) + "…" else selectedLibraryName
             "库：$name"
         }
-    }
-
-    fun feedCounter(): String {
-        if (filterAuthorName.isNotEmpty()) return "${currentIndex + 1}/${videos.size}"
-        return "${currentIndex + 1}/$totalRecordCount"
     }
 
     fun showHint(message: String) {

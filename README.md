@@ -194,25 +194,9 @@ cd android
 
 ### v1.4.1 (2026-10-16)
 
-**Bug Fixes**
-- 🐛 修复 HarmonyOS 定时器泄漏：`aboutToDisappear` 清理 `hintTimer`/`deleteAnimTimer`
-- 🐛 修复 HarmonyOS Swiper 复用播放器状态残留：`@Watch('onItemChanged')` 无条件重置播放器
-- 🐛 修复 Android `loadVideos` 竞态：reset 时无条件取消旧请求，避免旧响应覆盖新筛选
-- 🐛 修复 Android `finally` 块污染：仅当此 job 仍是当前 job 时才解除 `isLoading`
-- 🐛 修复 Android Pager 双向同步回弹：改为单向同步（仅 pager→state）
-- 🐛 优化 Android VideoCard 进度轮询：非活跃页不轮询，节省资源
-- 🐛 修复 Android 收藏并发写入：统一 `saveFavoritesAsync()` 序列化保存
-- 🐛 修复 Android 提示残留：`showHint` 使用 `tryFinally` 确保取消时清空
-
-**Code Quality**
-- ✨ `EmbyLibrary.ALL` 常量消除 3 处硬编码
-- ✨ `syncCurrentIndex` 空列表保护
-- ✨ `loadLibraries` 失败时提示用户而非静默
-- ✨ MediaListScreen 触底加载优化
-
-### v1.4.0 (2026-10-15)
-
-- Initial release with full features
+- 修复 HarmonyOS 定时器泄漏和 Swiper 复用问题
+- 修复 Android 视频加载竞态和 Pager 回弹问题
+- 优化进度轮询和收藏写入性能
 
 ## 权限说明
 
@@ -229,17 +213,6 @@ cd android
 - 删除视频需要 Emby 账号具备删除媒体权限，权限不足时会明确提示
 - 扫描媒体库需要服务端执行实际扫描，耗时取决于库的大小
 - 视频能否直接播放取决于服务端文件编码，不支持时会自动提示切换兼容模式
-
-## 开发计划
-
-- [ ] 播放历史记录
-- [ ] 字幕支持
-- [ ] 音轨切换
-- [ ] 更多倍速选项（0.5x, 0.75x）
-- [ ] 播放统计与报表
-- [ ] 多服务器支持
-- [ ] PWA 版本
-- [ ] 302 播放支持
 
 ## 贡献指南
 

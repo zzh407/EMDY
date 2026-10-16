@@ -294,9 +294,9 @@ private fun MediaGridItem(state: EmdyState, item: com.zzhs.emdy.data.EmbyVideo, 
             modifier = Modifier.padding(top = 6.dp)
         )
 
-        // 触底加载
-        androidx.compose.runtime.LaunchedEffect(item.id) {
-            if (state.mediaListItems.lastOrNull()?.id == item.id) onLoadMore()
+        // 触底加载（仅列表大小变化时重新评估，避免每次重组都触发）
+        androidx.compose.runtime.LaunchedEffect(state.mediaListItems.size) {
+            if (item.id == state.mediaListItems.lastOrNull()?.id) onLoadMore()
         }
     }
 }

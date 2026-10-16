@@ -89,7 +89,7 @@ class EmbyClient(
         requireAuth()
         val text = request("/emby/Users/${enc(userId)}/Views?IncludeExternalContent=false", "GET", "", true)
         val views = json.decodeFromString<EmbyViewsDto>(text)
-        val libraries = mutableListOf(EmbyLibrary("", "全部媒体库", "all"))
+        val libraries = mutableListOf(EmbyLibrary.ALL)
         views.Items?.forEach { item ->
             val id = item.Id ?: ""
             if (id.isEmpty()) return@forEach

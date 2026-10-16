@@ -189,7 +189,7 @@ fun LibraryPickerDialog(state: EmdyState) {
         title = { Text("切换媒体库", fontSize = 17.sp, color = Color.White) },
         text = {
             Column {
-                (listOf(EmbyLibrary("", "全部媒体库", "all")) + state.libraries.filter { it.id != "" })
+                (listOf(EmbyLibrary.ALL) + state.libraries.filter { it.id != "" })
                     .forEach { library ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

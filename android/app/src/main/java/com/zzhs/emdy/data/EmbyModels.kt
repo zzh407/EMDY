@@ -49,7 +49,12 @@ data class EmbyLibrary(
     val id: String = "",
     val name: String = "",
     val collectionType: String = ""
-)
+) {
+    companion object {
+        /** "全部媒体库" 占位项（用于下拉选择器的首项） */
+        val ALL = EmbyLibrary(id = "all", name = "全部媒体库", collectionType = "")
+    }
+}
 
 data class EmbySession(
     val serverUrl: String = "",

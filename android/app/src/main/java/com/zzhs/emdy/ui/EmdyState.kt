@@ -15,13 +15,33 @@ import com.zzhs.emdy.data.FavoriteStore
 import com.zzhs.emdy.data.SessionStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 全局状态与业务逻辑（对齐 HarmonyOS 版 Index 结构体）
  */
 class EmdyState(private val context: Context, private val scope: CoroutineScope) {
+
+    // ---------- 协程管理 ----------
+    private var loadVideosJob: Job? = null
+    private var loadMediaListJob: Job? = null
+    private var saveFavoritesJob: Job? = null
+
+    /** 序列化收藏写入，快速连续操作时只保留最后一次写入 */
+    private fun saveFavoritesAsync() {
+        saveFavoritesJob?.cancel()
+        saveFavoritesJob = scope.launch {
+            try {
+                FavoriteStore.save(context, favorites)
+            } catch (_: Exception) {
+                // 收藏保存失败不影响主流程
+            }
+        }
+    }
 
     // ---------- 会话与连接 ----------
     var session by mutableStateOf<EmbySession?>(null)
@@ -61,7 +81,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         private set
     var selectedLibraryId by mutableStateOf("")
         private set
-    var selectedLibraryName by mutableStateOf("全部媒体库")
+    var selectedLibraryName by mutableStateOf(EmbyLibrary.ALL.name)
         private set
     private var resumeLibraryId = ""
     private var resumeLibraryName = ""
@@ -155,8 +175,12 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         hintJob?.cancel()
         hintText = message
         hintJob = scope.launch {
-            kotlinx.coroutines.delay(1600)
-            hintText = ""
+            try {
+                kotlinx.coroutines.delay(1600)
+            } finally {
+                // 协程被取消时也清空提示，防止残留
+                if (hintJob?.isActive != true) hintText = ""
+            }
         }
     }
 
@@ -227,6 +251,11 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
     }
 
     fun changeServer() {
+        // 取消正在运行的网络请求
+        loadVideosJob?.cancel()
+        loadMediaListJob?.cancel()
+        loadVideosJob = null
+        loadMediaListJob = null
         scope.launch {
             SessionStore.clear(context)
             session = null
@@ -251,7 +280,9 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         scope.launch {
             try {
                 libraries = current.getLibraries()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // 显示提示而非静默失败，帮助用户定位网络/服务器问题
+                showHint("加载媒体库失败：${e.message ?: "未知错误"}")
             }
         }
     }
@@ -286,13 +317,15 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         isLoading = true
         errorMessage = ""
         if (reset) {
+            // 取消前序请求，避免旧响应覆盖新状态
+            loadVideosJob?.cancel()
             currentIndex = 0
             videos = emptyList()
             totalRecordCount = 0
             hasMore = true
             feedSourceCount = 0
         }
-        scope.launch {
+        loadVideosJob = scope.launch {
             try {
                 if (filterAuthorName.isNotEmpty()) {
                     // 作者筛选：全库拉取 + 客户端过滤（作者名来自 People，服务端无稳定过滤参数）
@@ -453,7 +486,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         val exists = favorites.any { it.id == item.id }
         favorites = if (exists) favorites.filter { it.id != item.id } else favorites + item
         showHint(if (exists) "已取消喜欢" else "已加入喜欢")
-        scope.launch { FavoriteStore.save(context, favorites) }
+        saveFavoritesAsync()
         if (selectedLibraryId == "favorites") {
             videos = favorites
             totalRecordCount = favorites.size
@@ -546,7 +579,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
             return
         }
         mediaListLoading = true
-        scope.launch {
+        loadMediaListJob = scope.launch {
             try {
                 val query = EmbyVideoQuery(
                     libraryId = selectedLibraryId,
@@ -687,7 +720,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
                 val removedFavs = favorites.count { it.id in deletedSet }
                 if (removedFavs > 0) {
                     favorites = favorites.filter { it.id !in deletedSet }
-                    FavoriteStore.save(context, favorites)
+                    saveFavoritesAsync()
                 }
                 if (totalRecordCount >= success.size) totalRecordCount -= success.size
                 syncFeedAfterBatchDelete(deletedSet)
@@ -728,7 +761,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
     private fun removeFavoriteRecord(id: String) {
         if (favorites.any { it.id == id }) {
             favorites = favorites.filter { it.id != id }
-            scope.launch { FavoriteStore.save(context, favorites) }
+            saveFavoritesAsync()
         }
     }
 

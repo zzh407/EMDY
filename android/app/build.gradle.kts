@@ -13,8 +13,8 @@ android {
         applicationId = "com.zzhs.emdy"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1000007
-        versionName = "1.4.0"
+        versionCode = 1000008
+        versionName = "1.4.1"
     }
 
     buildTypes {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -111,7 +112,7 @@ fun SettingsSheet(state: EmdyState) {
             SettingCheckbox(
                 checked = state.rememberLogin,
                 label = "记住服务器、用户名和密码"
-            ) { state.setRememberLogin(it) }
+            ) { state.updateRememberLogin(it) }
 
             // 倍速档位
             Column(modifier = Modifier.padding(top = 4.dp)) {
@@ -131,7 +132,7 @@ fun SettingsSheet(state: EmdyState) {
                                     if (selected) EmdyAccent else EmdySurfaceDim,
                                     RoundedCornerShape(14.dp)
                                 )
-                                .clickable { state.setFastSpeed(speed) }
+                                .clickable { state.updateFastSpeed(speed) }
                                 .padding(horizontal = 14.dp, vertical = 7.dp)
                         )
                     }
@@ -165,7 +166,7 @@ private fun SettingCheckbox(checked: Boolean, label: String, onChange: (Boolean)
 }
 
 @Composable
-private fun SheetButton(text: String, background: Color, onClick: () -> Unit) {
+private fun RowScope.SheetButton(text: String, background: Color, onClick: () -> Unit) {
     Text(
         text = text,
         fontSize = 13.sp,

@@ -193,6 +193,7 @@ fun MediaListScreen(state: EmdyState) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun MediaGridItem(state: EmdyState, item: com.zzhs.emdy.data.EmbyVideo, onLoadMore: () -> Unit) {
     val isCurrent = state.videos.getOrNull(state.currentIndex)?.id == item.id

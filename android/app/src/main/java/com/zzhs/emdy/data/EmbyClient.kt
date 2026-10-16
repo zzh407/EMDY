@@ -280,13 +280,13 @@ class EmbyClient(
             "$serverUrl/emby/Videos/${enc(itemId)}/master.m3u8" +
                 "?VideoCodec=h264&AudioCodec=aac&SegmentContainer=ts&MaxWidth=1280&VideoBitrate=6000000" +
                 "&AudioBitrate=192000&EnableAdaptiveBitrateStreaming=false&BreakOnNonKeyFrames=false" +
-                "&api_key=${enc(accessToken)}&DeviceId=${enc(EmbyApp.deviceId)}"
+                "&api_key=${enc(accessToken)}&DeviceId=${enc(EmdyApp.deviceId)}"
         PlaybackMode.ORIGINAL ->
             "$serverUrl/emby/Videos/${enc(itemId)}/original" +
-                "?api_key=${enc(accessToken)}&DeviceId=${enc(EmbyApp.deviceId)}"
+                "?api_key=${enc(accessToken)}&DeviceId=${enc(EmdyApp.deviceId)}"
         PlaybackMode.DIRECT ->
             "$serverUrl/emby/Videos/${enc(itemId)}/stream" +
-                "?Static=true&api_key=${enc(accessToken)}&DeviceId=${enc(EmbyApp.deviceId)}"
+                "?Static=true&api_key=${enc(accessToken)}&DeviceId=${enc(EmdyApp.deviceId)}"
     }
 
     private fun buildImageUrl(itemId: String, maxWidth: Int = 1080): String =

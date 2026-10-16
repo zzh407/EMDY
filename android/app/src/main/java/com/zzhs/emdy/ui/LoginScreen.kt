@@ -108,7 +108,7 @@ fun LoginScreen(state: EmdyState) {
             ) {
                 Checkbox(
                     checked = state.rememberLogin,
-                    onCheckedChange = { state.setRememberLogin(it) }
+                    onCheckedChange = { state.updateRememberLogin(it) }
                 )
                 Text(
                     text = "记住服务器、用户名和密码",

@@ -42,7 +42,6 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
     var videos by mutableStateOf<List<EmbyVideo>>(emptyList())
         private set
     var currentIndex by mutableStateOf(0)
-        private set
     var isLoading by mutableStateOf(false)
         private set
     var errorMessage by mutableStateOf("")
@@ -466,12 +465,12 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         loadVideos(true)
     }
 
-    fun setFastSpeed(speed: Float) {
+    fun updateFastSpeed(speed: Float) {
         fastSpeed = speed
         scope.launch { AppSettings.saveFastSpeed(context, speed) }
     }
 
-    fun setRememberLogin(value: Boolean) {
+    fun updateRememberLogin(value: Boolean) {
         rememberLogin = value
         scope.launch {
             if (value) {

@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -23,15 +25,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.zzhs.emdy.ui.theme.EmdyAccent
 import com.zzhs.emdy.ui.theme.EmdyBackground
+import com.zzhs.emdy.ui.theme.EmdyDelete
 import com.zzhs.emdy.ui.theme.EmdyTextMuted
 import com.zzhs.emdy.ui.theme.EmdyTextSecondary
 import androidx.compose.ui.platform.LocalConfiguration
 
 /** 竖屏短视频信息流 */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun FeedScreen(state: EmdyState) {
     val configuration = LocalConfiguration.current

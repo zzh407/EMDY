@@ -172,6 +172,18 @@ struct Index {
     }
   }
 
+  aboutToDisappear(): void {
+    // 清理所有定时器，防止组件销毁后回调访问已释放资源
+    if (this.hintTimer !== 0) {
+      clearTimeout(this.hintTimer);
+      this.hintTimer = 0;
+    }
+    if (this.deleteAnimTimer !== 0) {
+      clearTimeout(this.deleteAnimTimer);
+      this.deleteAnimTimer = 0;
+    }
+  }
+
   private async loadLibraries(): Promise<void> {
     const client = this.client;
     if (client === null) {

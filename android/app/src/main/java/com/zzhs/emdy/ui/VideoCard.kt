@@ -108,8 +108,9 @@ fun VideoCard(state: EmdyState, item: EmbyVideo, active: Boolean) {    val confi
         }
     }
 
-    // 进度轮询
+    // 进度轮询（仅活跃页轮询，非活跃页不消耗资源）
     LaunchedEffect(exoPlayer, active) {
+        if (!active) return@LaunchedEffect
         val player = exoPlayer ?: return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(200)

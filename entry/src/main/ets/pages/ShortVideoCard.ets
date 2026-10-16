@@ -8,7 +8,7 @@ interface TagLabel {
 
 @Component
 export struct ShortVideoCard {
-  @Prop item: EmbyVideo = new EmbyVideo();
+  @Prop @Watch('onItemChanged') item: EmbyVideo = new EmbyVideo();
   @Prop @Watch('onActiveChanged') active: boolean = false;
   @Prop @Watch('onMutedChanged') muted: boolean = false;
   @Prop bottomSafePadding: number = 0;
@@ -76,6 +76,32 @@ export struct ShortVideoCard {
     this.lastItemId = this.item.id;
     this.syncSource();
     this.paintTrashIcon();
+  }
+
+  private onItemChanged(): void {
+    // Swiper 复用卡片时 item 会变化，需无条件重置播放器状态
+    this.lastItemId = this.item.id;
+    this.modeIndex = 0;
+    this.syncSource();
+    this.progressValue = 0;
+    this.progressMax = 0;
+    this.showProgress = false;
+    this.isSeeking = false;
+    this.currentSpeed = 1.0;
+    this.isBoosting = false;
+    this.lastSeekTime = 0;
+    this.lastLiveSeekTime = 0;
+    this.lastLiveSeekTarget = -1;
+    this.isScrubbing = false;
+    this.showScrubFeedback = false;
+    this.clearProgressHide();
+    this.hasStarted = false;
+    this.hasError = false;
+    this.isPlaying = false;
+    this.controller.stop();
+    if (this.active) {
+      this.controller.start();
+    }
   }
 
   private tryNextMode(): void {

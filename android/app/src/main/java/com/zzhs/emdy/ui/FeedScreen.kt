@@ -56,20 +56,11 @@ fun FeedScreen(state: EmdyState) {
                     initialPage = state.currentIndex,
                     pageCount = { state.videos.size }
                 )
-                // Pager 与状态双向同步
+                // 单向同步：Pager 滑动 → 状态更新（避免双向循环）
                 LaunchedEffect(pagerState.currentPage) {
-                    if (pagerState.currentPage != state.currentIndex) {
-                        state.syncCurrentIndex(pagerState.currentPage)
-                        if (state.hasMore && pagerState.currentPage >= state.videos.size - 3) {
-                            state.loadVideos(false)
-                        }
-                    }
-                }
-                LaunchedEffect(state.currentIndex) {
-                    if (state.currentIndex != pagerState.currentPage &&
-                        state.currentIndex < state.videos.size
-                    ) {
-                        pagerState.scrollToPage(state.currentIndex)
+                    state.syncCurrentIndex(pagerState.currentPage)
+                    if (state.hasMore && pagerState.currentPage >= state.videos.size - 3) {
+                        state.loadVideos(false)
                     }
                 }
 

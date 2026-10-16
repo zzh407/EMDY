@@ -150,6 +150,10 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
     }
 
     fun syncCurrentIndex(index: Int) {
+        if (videos.isEmpty()) {
+            currentIndex = 0
+            return
+        }
         val target = index.coerceIn(0, videos.size - 1)
         if (target != currentIndex) {
             currentIndex = target
@@ -304,7 +308,14 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
 
     fun loadVideos(reset: Boolean) {
         val current = client ?: return
-        if (isLoading) return
+        if (reset) {
+            // reset 无条件抢占：取消旧请求并解除闸门，保证最新筛选条件立即生效
+            loadVideosJob?.cancel()
+            loadVideosJob = null
+            isLoading = false
+        } else if (isLoading) {
+            return
+        }
         if (selectedLibraryId == "favorites") {
             if (reset) {
                 videos = favorites
@@ -317,8 +328,6 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
         isLoading = true
         errorMessage = ""
         if (reset) {
-            // 取消前序请求，避免旧响应覆盖新状态
-            loadVideosJob?.cancel()
             currentIndex = 0
             videos = emptyList()
             totalRecordCount = 0
@@ -326,6 +335,7 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
             feedSourceCount = 0
         }
         loadVideosJob = scope.launch {
+            val thisJob = this.coroutineContext[Job]
             try {
                 if (filterAuthorName.isNotEmpty()) {
                     // 作者筛选：全库拉取 + 客户端过滤（作者名来自 People，服务端无稳定过滤参数）
@@ -386,7 +396,10 @@ class EmdyState(private val context: Context, private val scope: CoroutineScope)
             } catch (error: Exception) {
                 errorMessage = error.message ?: "加载失败"
             } finally {
-                isLoading = false
+                // 仅当此 job 未被新请求取代时才解除 loading，防止旧请求污染新请求状态
+                if (loadVideosJob === thisJob) {
+                    isLoading = false
+                }
             }
         }
     }

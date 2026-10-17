@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -8,6 +10,21 @@ plugins {
 android {
     namespace = "com.zzhs.emdy"
     compileSdk = 34
+
+    // 从 keystore.properties 读取签名配置（文件已被 gitignore 忽略）
+    val keystorePropsFile = file("../keystore.properties")
+    if (keystorePropsFile.exists()) {
+        val keystoreProps = Properties()
+        keystoreProps.load(keystorePropsFile.inputStream())
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.zzhs.emdy"
@@ -21,6 +38,9 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -11,3 +11,6 @@
 **/.test
 /.appanalyzer
 /.ssh
+# Android signing
+*.jks
+keystore.properties
